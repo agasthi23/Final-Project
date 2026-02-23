@@ -1,158 +1,200 @@
 // src/pages/AddBill.jsx
 import { useState } from "react";
-import { FiArrowLeft, FiZap, FiDroplet } from "react-icons/fi";
+import { FiZap, FiDroplet } from "react-icons/fi";
 import "./AddBill.css";
 
 const AddBill = () => {
   const [utilityType, setUtilityType] = useState("Electricity");
-  const [billingMonth, setBillingMonth] = useState("November 2025");
+  const [billingMonth, setBillingMonth] = useState("");
   const [unitsUsed, setUnitsUsed] = useState("");
   const [billAmount, setBillAmount] = useState("");
+  const [bills, setBills] = useState([]);
 
   const getUnitLabel = () => {
     return utilityType === "Electricity" ? "kWh" : "kL";
   };
 
-  const getUnitPlaceholder = () => {
-    return utilityType === "Electricity" ? "e.g., 450" : "e.g., 15.5";
-  };
+  const costPerUnit =
+    unitsUsed && billAmount
+      ? (billAmount / unitsUsed).toFixed(2)
+      : null;
 
-  const getUtilityIcon = () => {
-    return utilityType === "Electricity" ? <FiZap /> : <FiDroplet />;
-  };
+  const averageUsage =
+    bills.length > 0
+      ? (
+          bills.reduce((sum, bill) => sum + Number(bill.unitsUsed), 0) /
+          bills.length
+        ).toFixed(2)
+      : null;
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Here you would typically send the data to your backend
-    console.log({
+
+    const newBill = {
+      id: Date.now(),
       utilityType,
       billingMonth,
       unitsUsed,
       billAmount
-    });
-    
-    // Show success message and reset form
-    alert("Bill data submitted successfully!");
+    };
+
+    setBills([newBill, ...bills]);
+
     setUnitsUsed("");
     setBillAmount("");
+    setBillingMonth("");
+  };
+
+  const handleDelete = (id) => {
+    setBills(bills.filter((bill) => bill.id !== id));
   };
 
   return (
-    <div className="add-bill-container">
-      {/* Header */}
-      <div className="header-section">
-        <a href="/dashboard" className="back-link">
-          <FiArrowLeft size={18} />
-          Back to Dashboard
-        </a>
-        <h1 className="header-title">Add Bill Data</h1>
-        <p className="header-subtitle">Enter your historical utility bill information</p>
+    <div className="billing-page">
+
+      {/* Page Header */}
+      <div className="page-header">
+        <h1>Billing</h1>
+        <p>Manage and analyze your utility bills</p>
       </div>
 
-      {/* Main Form Card */}
-      <div className="form-card">
-        <form onSubmit={handleSubmit}>
-          {/* Utility Type */}
-          <div className="form-group">
-            <label className="form-label">
-              Select Utility Type
-            </label>
-            <div className="utility-type-selector">
-              <select
-                value={utilityType}
-                onChange={(e) => setUtilityType(e.target.value)}
-                className="form-select"
+      {/* Top Section */}
+      <div className="billing-top-section">
+
+        {/* Form Section */}
+        <div className="billing-form-card">
+          <h2>Add New Bill</h2>
+
+          <form onSubmit={handleSubmit}>
+
+            {/* Utility Toggle */}
+            <div className="utility-toggle">
+              <button
+                type="button"
+                className={utilityType === "Electricity" ? "active" : ""}
+                onClick={() => setUtilityType("Electricity")}
               >
-                <option>Electricity</option>
-                <option>Water</option>
-              </select>
-              <div className="utility-icon">
-                {getUtilityIcon()}
-              </div>
+                <FiZap /> Electricity
+              </button>
+
+              <button
+                type="button"
+                className={utilityType === "Water" ? "active" : ""}
+                onClick={() => setUtilityType("Water")}
+              >
+                <FiDroplet /> Water
+              </button>
             </div>
-          </div>
 
-          {/* Billing Month */}
-          <div className="form-group">
-            <label className="form-label">
-              Billing Month
-            </label>
-            <select
-              value={billingMonth}
-              onChange={(e) => setBillingMonth(e.target.value)}
-              className="form-select"
-            >
-              <option>November 2025</option>
-              <option>October 2025</option>
-              <option>September 2025</option>
-              <option>August 2025</option>
-              <option>July 2025</option>
-              <option>June 2025</option>
-              {/* Add more months as needed */}
-            </select>
-          </div>
+            <div className="form-group">
+              <label>Billing Month</label>
+              <input
+                type="month"
+                value={billingMonth}
+                onChange={(e) => setBillingMonth(e.target.value)}
+                required
+              />
+            </div>
 
-          {/* Units Used */}
-          <div className="form-group">
-            <label className="form-label">
-              Units Used ({getUnitLabel()})
-            </label>
-            <input
-              type="number"
-              placeholder={getUnitPlaceholder()}
-              value={unitsUsed}
-              onChange={(e) => setUnitsUsed(e.target.value)}
-              className="form-input"
-              required
-            />
-          </div>
+            <div className="form-group">
+              <label>Units Used ({getUnitLabel()})</label>
+              <input
+                type="number"
+                value={unitsUsed}
+                onChange={(e) => setUnitsUsed(e.target.value)}
+                placeholder="Enter units"
+                required
+              />
+            </div>
 
-          {/* Bill Amount */}
-          <div className="form-group">
-            <label className="form-label">
-              Bill Amount (₹)
-            </label>
-            <input
-              type="number"
-              placeholder="e.g., 4500"
-              value={billAmount}
-              onChange={(e) => setBillAmount(e.target.value)}
-              className="form-input"
-              required
-            />
-          </div>
+            <div className="form-group">
+              <label>Bill Amount (₹)</label>
+              <input
+                type="number"
+                value={billAmount}
+                onChange={(e) => setBillAmount(e.target.value)}
+                placeholder="Enter amount"
+                required
+              />
+            </div>
 
-          {/* Buttons */}
-          <div className="form-buttons">
-            <button
-              type="button"
-              className="btn btn-cancel"
-              onClick={() => window.history.back()}
-            >
-              Cancel
+            {costPerUnit && (
+              <div className="cost-preview">
+                Cost per Unit: ₹ {costPerUnit}
+              </div>
+            )}
+
+            <button type="submit" className="submit-btn">
+              Submit Bill
             </button>
-            <button
-              type="submit"
-              className="btn btn-submit"
-            >
-              Submit Bill Data
-            </button>
+
+          </form>
+        </div>
+
+        {/* Insights Section */}
+        <div className="billing-insights-card">
+          <h2>Quick Insights</h2>
+
+          <div className="insight-item">
+            <span>Total Bills</span>
+            <strong>{bills.length}</strong>
           </div>
-        </form>
+
+          <div className="insight-item">
+            <span>Average Usage</span>
+            <strong>
+              {averageUsage ? `${averageUsage} ${getUnitLabel()}` : "--"}
+            </strong>
+          </div>
+
+          <div className="insight-item">
+            <span>Latest Cost per Unit</span>
+            <strong>
+              {costPerUnit ? `₹ ${costPerUnit}` : "--"}
+            </strong>
+          </div>
+        </div>
       </div>
 
-      {/* Tips Section */}
-      <div className="tips-section">
-        <h3 className="tips-title">
-          📋 Tips for Adding Bill Data
-        </h3>
-        <ul className="tips-list">
-          <li>Add historical data for better predictions</li>
-          <li>Enter accurate unit consumption for precise analysis</li>
-          <li>Regular updates help track your usage patterns</li>
-          <li>Include at least 3 months of data for trend analysis</li>
-        </ul>
+      {/* Billing History Table */}
+      <div className="billing-history-card">
+        <h2>Billing History</h2>
+
+        {bills.length === 0 ? (
+          <p className="empty-text">No bills added yet.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Month</th>
+                <th>Type</th>
+                <th>Units</th>
+                <th>Amount</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {bills.map((bill) => (
+                <tr key={bill.id}>
+                  <td>{bill.billingMonth}</td>
+                  <td>{bill.utilityType}</td>
+                  <td>{bill.unitsUsed}</td>
+                  <td>₹ {bill.billAmount}</td>
+                  <td>
+                    <button
+                      className="delete-btn"
+                      onClick={() => handleDelete(bill.id)}
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
+
     </div>
   );
 };

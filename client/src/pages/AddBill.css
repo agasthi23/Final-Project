@@ -1,203 +1,206 @@
-/* src/pages/AddBill.css */
-.add-bill-container {
-  min-height: 100vh;
-  background: #f8fafc;
-  padding: 40px 20px;
-}
-
-.header-section {
-  max-width: 800px;
-  margin: 0 auto 40px auto;
-}
-
-.back-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  color: #2563eb;
-  font-size: 15px;
-  margin-bottom: 12px;
-  text-decoration: none;
-  transition: color 0.2s ease;
-}
-
-.back-link:hover {
-  color: #1d4ed8;
-}
-
-.header-title {
-  font-size: 28px;
-  font-weight: bold;
-  color: #1e293b;
-  margin: 0 0 8px 0;
-}
-
-.header-subtitle {
-  color: #64748b;
-  margin: 0;
-}
-
-.form-card {
-  max-width: 600px;
-  margin: 0 auto;
-  background: white;
-  border-radius: 20px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+.billing-page {
   padding: 40px;
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  min-height: 100vh;
+  background: transparent; /* REMOVE dark blue background */
 }
 
-.form-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 15px 35px rgba(0,0,0,0.12);
+/* HEADER */
+
+.page-header h1 {
+  font-size: 28px;
+  margin-bottom: 5px;
+  color: #1e293b;
 }
+
+.page-header p {
+  color: #64748b;
+  margin-bottom: 30px;
+}
+
+/* TOP GRID */
+
+.billing-top-section {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 30px;
+  margin-bottom: 40px;
+}
+
+/* FORM CARD */
+
+.billing-form-card {
+  background: #ffffff;
+  padding: 30px;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+.billing-form-card h2 {
+  margin-bottom: 20px;
+  color: #1e293b;
+}
+
+/* FORM */
 
 .form-group {
-  margin-bottom: 28px;
+  margin-bottom: 18px;
 }
 
-.form-label {
+.form-group label {
   display: block;
-  margin-bottom: 8px;
-  font-weight: 600;
-  color: #374151;
+  margin-bottom: 6px;
+  font-size: 14px;
+  color: #475569;
 }
 
-.form-input,
-.form-select {
+.form-group input {
   width: 100%;
-  padding: 14px 16px;
-  border-radius: 12px;
+  padding: 12px;
+  border-radius: 10px;
   border: 1px solid #e2e8f0;
   background: #f8fafc;
-  font-size: 16px;
   color: #1e293b;
-  transition: border-color 0.2s ease, background-color 0.2s ease;
+  transition: 0.2s;
 }
 
-.form-input:focus,
-.form-select:focus {
+.form-group input:focus {
   outline: none;
-  border-color: #2563eb;
-  background-color: #fff;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+  border-color: #3b82f6;
+  background: white;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
-.form-buttons {
+/* TOGGLE */
+
+.utility-toggle {
   display: flex;
-  gap: 16px;
-  justify-content: flex-end;
-  margin-top: 40px;
+  gap: 10px;
+  margin-bottom: 20px;
 }
 
-.btn {
-  padding: 14px 32px;
-  border-radius: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.btn-cancel {
+.utility-toggle button {
+  flex: 1;
+  padding: 10px;
+  border-radius: 10px;
   border: 1px solid #e2e8f0;
   background: #f1f5f9;
-  color: #64748b;
+  color: #475569;
+  cursor: pointer;
+  transition: 0.2s;
 }
 
-.btn-cancel:hover {
-  background: #e2e8f0;
-}
-
-.btn-submit {
-  border: none;
-  background: #2563eb;
+.utility-toggle button.active {
+  background: #3b82f6;
   color: white;
+  border: none;
 }
 
-.btn-submit:hover {
-  background: #1d4ed8;
-  transform: translateY(-2px);
-  box-shadow: 0 5px 15px rgba(37, 99, 235, 0.3);
+/* COST PREVIEW */
+
+.cost-preview {
+  margin-bottom: 15px;
+  padding: 10px;
+  background: #eef2ff;
+  border-radius: 8px;
+  font-size: 14px;
+  color: #1e40af;
 }
 
-.tips-section {
-  max-width: 600px;
-  margin: 40px auto 0 auto;
-  background: #ebf8ff;
+/* BUTTON */
+
+.submit-btn {
+  width: 100%;
+  padding: 12px;
+  background: #3b82f6;
+  border: none;
+  border-radius: 10px;
+  font-weight: 600;
+  color: white;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.submit-btn:hover {
+  background: #2563eb;
+}
+
+/* INSIGHTS */
+
+.billing-insights-card {
+  background: #ffffff;
+  padding: 25px;
   border-radius: 16px;
-  padding: 24px;
-  border: 1px solid #bfdbfe;
-  animation: fadeIn 0.5s ease;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
 }
 
-.tips-title {
-  margin: 0 0 16px 0;
-  color: #1e40af;
-  font-size: 18px;
+.billing-insights-card h2 {
+  margin-bottom: 20px;
+  color: #1e293b;
 }
 
-.tips-list {
-  margin: 0;
-  padding-left: 20px;
-  color: #1e40af;
+.insight-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 15px;
+  font-size: 14px;
+  color: #475569;
 }
 
-.tips-list li {
-  margin-bottom: 8px;
+/* HISTORY */
+
+.billing-history-card {
+  background: #ffffff;
+  padding: 25px;
+  border-radius: 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.06);
 }
 
-.tips-list li:last-child {
-  margin-bottom: 0;
+.billing-history-card h2 {
+  margin-bottom: 20px;
+  color: #1e293b;
 }
 
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+thead {
+  background: #f8fafc;
+}
+
+th, td {
+  padding: 12px;
+  text-align: left;
+  font-size: 14px;
+  color: #334155;
+}
+
+tbody tr {
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.delete-btn {
+  background: #ef4444;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+}
+
+.delete-btn:hover {
+  background: #dc2626;
+}
+
+.empty-text {
+  color: #94a3b8;
+}
+
+/* RESPONSIVE */
+
+@media (max-width: 900px) {
+  .billing-top-section {
+    grid-template-columns: 1fr;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@media (max-width: 768px) {
-  .add-bill-container {
-    padding: 20px 15px;
-  }
-  
-  .form-card {
-    padding: 30px 20px;
-  }
-  
-  .form-buttons {
-    flex-direction: column;
-    gap: 12px;
-  }
-  
-  .btn {
-    width: 100%;
-  }
-}
-/* Add to AddBill.css */
-.utility-type-selector {
-  position: relative;
-}
-
-.utility-icon {
-  position: absolute;
-  right: 15px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: #64748b;
-  pointer-events: none;
-}
-
-.form-select {
-  appearance: none;
-  padding-right: 45px;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 15px center;
-  padding-right: 35px;
 }
