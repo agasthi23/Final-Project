@@ -1,17 +1,34 @@
 import { useState } from "react";
-import Sidebar from "../components/Sidebar"; // This is the ONLY place Sidebar is imported for the layout
-import "./MainLayout.css";
+import Sidebar from "../components/Sidebar";
 
 const MainLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
-    <div className="main-layout">
-      {/* The Sidebar is rendered here, inside the layout */}
+    <div style={{
+      display: 'flex',
+      minHeight: '100vh',
+      backgroundColor: 'var(--background)',
+      color: 'var(--text-dark)',
+      margin: 0,
+      padding: 0,
+      width: '100vw',
+      height: '100vh',
+      overflow: 'hidden'
+    }}>
       <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
       
-      {/* The main content area (like the Dashboard) is rendered here */}
-      <div className={`content ${sidebarOpen ? "sidebar-open" : "sidebar-closed"}`}>
+      <div style={{
+        flex: 1,
+        padding: '2rem',
+        marginLeft: sidebarOpen ? '260px' : '80px',
+        backgroundColor: 'var(--background)',
+        color: 'var(--text-dark)',
+        transition: 'margin-left 0.3s ease',
+        width: '100%',
+        height: '100%',
+        overflowY: 'auto'
+      }}>
         {children}
       </div>
     </div>
