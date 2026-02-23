@@ -1,0 +1,51 @@
+/* src/theme/global.css */
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
+
+/* ========== LIGHT THEME (DEFAULT) ========== */
+:root {
+  --bg-primary: #f8fafc;
+  --bg-card: #ffffff;
+  --bg-hover: #f1f5f9;
+
+  --text-title: #0f172a;
+  --text-body: #1e293b;
+  --text-muted: #64748b;
+
+  --primary: #2563eb;
+  --accent: #38bdf8;
+
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+
+  --border: #e5e7eb;
+  --shadow-card: 0 8px 24px rgba(15, 23, 42, 0.08);
+}
+
+/* ========== DARK THEME ========== */
+.dark {
+  --bg-primary: #0f172a;
+  --bg-card: #1e293b;
+  --bg-hover: #334155;
+
+  --text-title: #f8fafc;
+  --text-body: #e5e7eb;
+  --text-muted: #94a3b8;
+
+  --primary: #60a5fa;
+  --accent: #22d3ee;
+
+  --success: #4ade80;
+  --warning: #fbbf24;
+  --danger: #f87171;
+
+  --border: #334155;
+  --shadow-card: 0 12px 28px rgba(0, 0, 0, 0.4);
+}
+
+body {
+  font-family: "Inter", sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-body);
+  transition: background 0.3s ease, color 0.3s ease;
+}
