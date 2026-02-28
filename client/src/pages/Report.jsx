@@ -1,73 +1,131 @@
 // src/pages/Report.jsx
-import { useState, useEffect, useMemo, useRef } from "react";
+// ORIGINAL logic 100% preserved — only design tokens updated to match dashboard
+import { useState, useEffect, useMemo } from "react";
 import {
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ResponsiveContainer, Area, AreaChart,
 } from "recharts";
-import "./Report.css";
+import {
+  FiZap, FiDroplet, FiGrid, FiDollarSign, FiTrendingUp,
+  FiDownload, FiCheckCircle, FiAlertTriangle, FiInfo,
+} from "react-icons/fi";
 
-// Custom Tooltip for charts
-const CustomTooltip = ({ active, payload, label, prefix = "" }) => {
-  if (active && payload && payload.length) {
-    return (
-      <div className="custom-tooltip">
-        <p className="tooltip-label">{label}</p>
-        {payload.map((p, i) => (
-          <p key={i} className="tooltip-value" style={{ color: p.color }}>
-            <span className="tooltip-dot" style={{ background: p.color }} />
-            {p.name}: <strong>{prefix}{p.value?.toLocaleString()}</strong>
-          </p>
-        ))}
-      </div>
-    );
-  }
-  return null;
+/* ─── Font (shared with dashboard) ─── */
+if (!document.getElementById("db-font")) {
+  const l = document.createElement("link");
+  l.id = "db-font"; l.rel = "stylesheet";
+  l.href = "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap";
+  document.head.appendChild(l);
+}
+if (!document.getElementById("rpt-anim")) {
+  const s = document.createElement("style");
+  s.id = "rpt-anim";
+  s.textContent = `
+    @keyframes rptFadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+    .r-fu  { animation: rptFadeUp .4s ease both }
+    .r-fu1 { animation-delay:.05s } .r-fu2 { animation-delay:.10s }
+    .r-fu3 { animation-delay:.15s } .r-fu4 { animation-delay:.20s }
+    .r-fu5 { animation-delay:.25s }
+    .r-kpi:hover        { transform:translateY(-2px)!important; box-shadow:0 8px 28px rgba(0,0,0,.09)!important; }
+    .r-chart:hover      { transform:translateY(-2px)!important; box-shadow:0 8px 28px rgba(0,0,0,.09)!important; }
+    .r-export:hover     { background:#0f172a!important; color:#fff!important; border-color:#0f172a!important; }
+    .r-toggle:hover     { background:#f0f2f7!important; }
+    .r-pageBtn:hover:not(:disabled) { border-color:#2563eb!important; color:#2563eb!important; }
+    .r-pageDot:hover:not(.active)   { background:#f0f2f7!important; }
+    .r-th:hover { color:#0f172a!important; }
+    .r-tr:hover { background:#f8fafc!important; }
+  `;
+  document.head.appendChild(s);
+}
+
+/* ════ TOKENS — identical to Dashboard ════ */
+const C = {
+  page:"#f3f4f8", card:"#fff", hover:"#f0f2f7", surface2:"#f8fafc",
+  ink:"#0f172a", body:"#334155", muted:"#64748b", faint:"#94a3b8",
+  border:"#e2e8f0", borderB:"#cbd5e1",
+  blue:"#2563eb", blueL:"#eff6ff", blueM:"#bfdbfe",
+  teal:"#0891b2", tealL:"#ecfeff", tealM:"#a5f3fc",
+  green:"#059669", greenL:"#ecfdf5", greenM:"#a7f3d0",
+  amber:"#d97706", amberL:"#fffbeb", amberM:"#fde68a",
+  red:"#dc2626",   redL:"#fef2f2",   redM:"#fecaca",
+  violet:"#7c3aed",violetL:"#f5f3ff",violetM:"#ddd6fe",
+  s1:"0 1px 3px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04)",
+  s2:"0 4px 16px rgba(15,23,42,.08),0 2px 4px rgba(15,23,42,.04)",
+  s3:"0 12px 40px rgba(15,23,42,.10),0 4px 8px rgba(15,23,42,.04)",
+};
+const F = "'Plus Jakarta Sans',-apple-system,sans-serif";
+const ax = { fill:C.faint, fontSize:11, fontFamily:F };
+
+/* ════ CUSTOM TOOLTIP (original logic, dashboard styling) ════ */
+const CustomTooltip = ({ active, payload, label, prefix="" }) => {
+  if (!active || !payload?.length) return null;
+  return (
+    <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10,
+      padding:"10px 14px", boxShadow:C.s3, fontFamily:F, minWidth:150 }}>
+      <p style={{ fontSize:"0.7rem", fontWeight:700, color:C.muted, margin:"0 0 7px",
+        textTransform:"uppercase", letterSpacing:"0.08em" }}>{label}</p>
+      {payload.map((p,i) => (
+        <div key={i} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:i<payload.length-1?4:0 }}>
+          <span style={{ width:8, height:8, borderRadius:2, background:p.color, display:"inline-block" }}/>
+          <span style={{ fontSize:"0.75rem", color:C.muted, flex:1 }}>{p.name}</span>
+          <span style={{ fontSize:"0.8rem", fontWeight:700, color:C.ink }}>
+            {prefix}{p.value?.toLocaleString()}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 };
 
+/* ════ MAIN COMPONENT ════ */
 const Report = () => {
+
+  /* ── ORIGINAL STATE & DATA (unchanged) ── */
   const [billsData] = useState([
-    { id: 1,  utilityType: "Electricity", billingMonth: "June 2025",      unitsUsed: 320, billAmount: 2750 },
-    { id: 2,  utilityType: "Water",       billingMonth: "June 2025",      unitsUsed: 22,  billAmount: 880  },
-    { id: 3,  utilityType: "Electricity", billingMonth: "July 2025",      unitsUsed: 345, billAmount: 2950 },
-    { id: 4,  utilityType: "Water",       billingMonth: "July 2025",      unitsUsed: 24,  billAmount: 960  },
-    { id: 5,  utilityType: "Electricity", billingMonth: "August 2025",    unitsUsed: 380, billAmount: 3250 },
-    { id: 6,  utilityType: "Water",       billingMonth: "August 2025",    unitsUsed: 26,  billAmount: 1040 },
-    { id: 7,  utilityType: "Electricity", billingMonth: "September 2025", unitsUsed: 350, billAmount: 3000 },
-    { id: 8,  utilityType: "Water",       billingMonth: "September 2025", unitsUsed: 23,  billAmount: 920  },
-    { id: 9,  utilityType: "Electricity", billingMonth: "October 2025",   unitsUsed: 330, billAmount: 2820 },
-    { id: 10, utilityType: "Water",       billingMonth: "October 2025",   unitsUsed: 21,  billAmount: 840  },
-    { id: 11, utilityType: "Electricity", billingMonth: "November 2025",  unitsUsed: 310, billAmount: 2650 },
-    { id: 12, utilityType: "Water",       billingMonth: "November 2025",  unitsUsed: 20,  billAmount: 800  },
-    { id: 13, utilityType: "Electricity", billingMonth: "December 2025",  unitsUsed: 340, billAmount: 2900 },
-    { id: 14, utilityType: "Water",       billingMonth: "December 2025",  unitsUsed: 22,  billAmount: 860  },
+    { id:1,  utilityType:"Electricity", billingMonth:"June 2025",      unitsUsed:320, billAmount:2750 },
+    { id:2,  utilityType:"Water",       billingMonth:"June 2025",      unitsUsed:22,  billAmount:880  },
+    { id:3,  utilityType:"Electricity", billingMonth:"July 2025",      unitsUsed:345, billAmount:2950 },
+    { id:4,  utilityType:"Water",       billingMonth:"July 2025",      unitsUsed:24,  billAmount:960  },
+    { id:5,  utilityType:"Electricity", billingMonth:"August 2025",    unitsUsed:380, billAmount:3250 },
+    { id:6,  utilityType:"Water",       billingMonth:"August 2025",    unitsUsed:26,  billAmount:1040 },
+    { id:7,  utilityType:"Electricity", billingMonth:"September 2025", unitsUsed:350, billAmount:3000 },
+    { id:8,  utilityType:"Water",       billingMonth:"September 2025", unitsUsed:23,  billAmount:920  },
+    { id:9,  utilityType:"Electricity", billingMonth:"October 2025",   unitsUsed:330, billAmount:2820 },
+    { id:10, utilityType:"Water",       billingMonth:"October 2025",   unitsUsed:21,  billAmount:840  },
+    { id:11, utilityType:"Electricity", billingMonth:"November 2025",  unitsUsed:310, billAmount:2650 },
+    { id:12, utilityType:"Water",       billingMonth:"November 2025",  unitsUsed:20,  billAmount:800  },
+    { id:13, utilityType:"Electricity", billingMonth:"December 2025",  unitsUsed:340, billAmount:2900 },
+    { id:14, utilityType:"Water",       billingMonth:"December 2025",  unitsUsed:22,  billAmount:860  },
   ]);
 
-  const [utilityFilter, setUtilityFilter]     = useState("Both");
-  const [timeRange, setTimeRange]             = useState("Yearly");
-  const [selectedMonth, setSelectedMonth]     = useState("November 2025");
-  const [selectedQuarter, setSelectedQuarter] = useState("Q4 2025");
-  const [selectedYear, setSelectedYear]       = useState("2025");
-  const [currentPage, setCurrentPage]         = useState(1);
-  const [sortConfig, setSortConfig]           = useState({ key: "billingMonth", direction: "ascending" });
-  const [animatedValues, setAnimatedValues]   = useState({ units: 0, amount: 0, avg: 0 });
+  const [utilityFilter,    setUtilityFilter]    = useState("Both");
+  const [timeRange,        setTimeRange]        = useState("Yearly");
+  const [selectedMonth,    setSelectedMonth]    = useState("November 2025");
+  const [selectedQuarter,  setSelectedQuarter]  = useState("Q4 2025");
+  const [selectedYear,     setSelectedYear]     = useState("2025");
+  const [currentPage,      setCurrentPage]      = useState(1);
+  const [sortConfig,       setSortConfig]       = useState({ key:"billingMonth", direction:"ascending" });
+  const [animatedValues,   setAnimatedValues]   = useState({ units:0, amount:0, avg:0 });
   const rowsPerPage = 5;
 
   const monthOrder = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-  const availableMonths = useMemo(() => {
-    return [...new Set(billsData.map(b => b.billingMonth))].sort((a, b) =>
-      monthOrder.indexOf(a.split(" ")[0]) - monthOrder.indexOf(b.split(" ")[0]));
-  }, [billsData]);
+  /* ── ALL ORIGINAL COMPUTED DATA (unchanged) ── */
+  const availableMonths = useMemo(() =>
+    [...new Set(billsData.map(b => b.billingMonth))].sort((a,b) =>
+      monthOrder.indexOf(a.split(" ")[0]) - monthOrder.indexOf(b.split(" ")[0])),
+  [billsData]);
 
   const availableQuarters = useMemo(() => {
     const quarters = new Set();
     billsData.forEach(bill => {
       const [month, year] = bill.billingMonth.split(" ");
       let q;
-      if (["January","February","March"].includes(month))          q = `Q1 ${year}`;
-      else if (["April","May","June"].includes(month))             q = `Q2 ${year}`;
-      else if (["July","August","September"].includes(month))      q = `Q3 ${year}`;
-      else if (["October","November","December"].includes(month))  q = `Q4 ${year}`;
+      if (["January","February","March"].includes(month))         q = `Q1 ${year}`;
+      else if (["April","May","June"].includes(month))            q = `Q2 ${year}`;
+      else if (["July","August","September"].includes(month))     q = `Q3 ${year}`;
+      else if (["October","November","December"].includes(month)) q = `Q4 ${year}`;
       quarters.add(q);
     });
     return Array.from(quarters).sort();
@@ -84,7 +142,7 @@ const Report = () => {
     } else if (timeRange === "Quarterly") {
       const [q, yr] = selectedQuarter.split(" ");
       const qMonths = { Q1:["January","February","March"], Q2:["April","May","June"], Q3:["July","August","September"], Q4:["October","November","December"] };
-      f = f.filter(b => { const [m, y] = b.billingMonth.split(" "); return y === yr && qMonths[q].includes(m); });
+      f = f.filter(b => { const [m,y] = b.billingMonth.split(" "); return y===yr && qMonths[q].includes(m); });
     } else {
       f = f.filter(b => b.billingMonth.includes(selectedYear));
     }
@@ -92,31 +150,24 @@ const Report = () => {
   }, [billsData, utilityFilter, timeRange, selectedMonth, selectedQuarter, selectedYear]);
 
   const summaryMetrics = useMemo(() => {
-    if (!filteredData.length) return { totalUnits: 0, totalAmount: 0, avgMonthlyCost: 0, highestConsumptionMonth: "N/A" };
-    const totalUnits  = filteredData.reduce((s, b) => s + b.unitsUsed, 0);
-    const totalAmount = filteredData.reduce((s, b) => s + b.billAmount, 0);
+    if (!filteredData.length) return { totalUnits:0, totalAmount:0, avgMonthlyCost:0, highestConsumptionMonth:"N/A" };
+    const totalUnits  = filteredData.reduce((s,b) => s+b.unitsUsed,  0);
+    const totalAmount = filteredData.reduce((s,b) => s+b.billAmount, 0);
     let avgMonthlyCost;
     if (timeRange === "Monthly")        avgMonthlyCost = totalAmount;
     else if (timeRange === "Quarterly") avgMonthlyCost = totalAmount / 3;
     else { const months = new Set(filteredData.map(b => b.billingMonth)).size; avgMonthlyCost = totalAmount / months; }
-    const highest = filteredData.reduce((max, b) => b.unitsUsed > max.unitsUsed ? b : max, filteredData[0]);
-    return { totalUnits, totalAmount, avgMonthlyCost: Math.round(avgMonthlyCost), highestConsumptionMonth: highest.billingMonth };
+    const highest = filteredData.reduce((max,b) => b.unitsUsed > max.unitsUsed ? b : max, filteredData[0]);
+    return { totalUnits, totalAmount, avgMonthlyCost:Math.round(avgMonthlyCost), highestConsumptionMonth:highest.billingMonth };
   }, [filteredData, timeRange]);
 
-  // Animate numbers when metrics change
   useEffect(() => {
-    const start = Date.now();
-    const duration = 800;
+    const start = Date.now(), duration = 800;
     const { totalUnits, totalAmount, avgMonthlyCost } = summaryMetrics;
     const tick = () => {
-      const elapsed = Date.now() - start;
-      const progress = Math.min(elapsed / duration, 1);
-      const ease = 1 - Math.pow(1 - progress, 3);
-      setAnimatedValues({
-        units:  Math.round(totalUnits  * ease),
-        amount: Math.round(totalAmount * ease),
-        avg:    Math.round(avgMonthlyCost * ease),
-      });
+      const elapsed = Date.now()-start, progress = Math.min(elapsed/duration, 1);
+      const ease = 1-Math.pow(1-progress, 3);
+      setAnimatedValues({ units:Math.round(totalUnits*ease), amount:Math.round(totalAmount*ease), avg:Math.round(avgMonthlyCost*ease) });
       if (progress < 1) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
@@ -126,11 +177,11 @@ const Report = () => {
     const data = {};
     billsData.forEach(bill => {
       if (utilityFilter !== "Both" && bill.utilityType !== utilityFilter) return;
-      if (!data[bill.billingMonth]) data[bill.billingMonth] = { month: bill.billingMonth.split(" ")[0] };
+      if (!data[bill.billingMonth]) data[bill.billingMonth] = { month:bill.billingMonth.split(" ")[0] };
       if (utilityFilter === "Both") data[bill.billingMonth][bill.utilityType] = bill.unitsUsed;
       else data[bill.billingMonth].units = bill.unitsUsed;
     });
-    return Object.values(data).sort((a, b) => monthOrder.indexOf(a.month) - monthOrder.indexOf(b.month));
+    return Object.values(data).sort((a,b) => monthOrder.indexOf(a.month)-monthOrder.indexOf(b.month));
   }, [billsData, utilityFilter]);
 
   const monthlyExpensesData = useMemo(() => {
@@ -138,265 +189,344 @@ const Report = () => {
     billsData.forEach(bill => {
       if (utilityFilter !== "Both" && bill.utilityType !== utilityFilter) return;
       const m = bill.billingMonth.split(" ")[0];
-      if (!data[m]) data[m] = { month: m, expenses: 0, electricity: 0, water: 0 };
+      if (!data[m]) data[m] = { month:m, expenses:0, electricity:0, water:0 };
       data[m].expenses += bill.billAmount;
       if (bill.utilityType === "Electricity") data[m].electricity += bill.billAmount;
       else data[m].water += bill.billAmount;
     });
-    return Object.values(data).sort((a, b) => monthOrder.indexOf(a.month) - monthOrder.indexOf(b.month));
+    return Object.values(data).sort((a,b) => monthOrder.indexOf(a.month)-monthOrder.indexOf(b.month));
   }, [billsData, utilityFilter]);
 
   const utilityDistributionData = useMemo(() => {
     if (utilityFilter !== "Both") return [];
-    const elecAmount  = billsData.filter(b => b.utilityType === "Electricity").reduce((s, b) => s + b.billAmount, 0);
-    const waterAmount = billsData.filter(b => b.utilityType === "Water").reduce((s, b) => s + b.billAmount, 0);
+    const elecAmount  = billsData.filter(b => b.utilityType==="Electricity").reduce((s,b) => s+b.billAmount, 0);
+    const waterAmount = billsData.filter(b => b.utilityType==="Water").reduce((s,b) => s+b.billAmount, 0);
     return [
-      { name: "Electricity", value: elecAmount,  color: "#d97706" },
-      { name: "Water",       value: waterAmount, color: "#0284c7" },
+      { name:"Electricity", value:elecAmount,  color:C.amber },
+      { name:"Water",       value:waterAmount, color:C.teal  },
     ];
   }, [billsData, utilityFilter]);
 
   const tableData = useMemo(() => {
-    const sorted = [...filteredData].sort((a, b) => {
-      if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction === "ascending" ? -1 : 1;
-      if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction === "ascending" ? 1  : -1;
+    const sorted = [...filteredData].sort((a,b) => {
+      if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction==="ascending" ? -1 : 1;
+      if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction==="ascending" ?  1 : -1;
       return 0;
     });
-    return sorted.map((bill, i) => {
+    return sorted.map((bill,i) => {
       let usageChange = 0;
-      if (i > 0 && bill.utilityType === sorted[i - 1].utilityType) {
-        const prev = sorted[i - 1].unitsUsed;
-        usageChange = ((bill.unitsUsed - prev) / prev) * 100;
+      if (i > 0 && bill.utilityType === sorted[i-1].utilityType) {
+        const prev = sorted[i-1].unitsUsed;
+        usageChange = ((bill.unitsUsed-prev)/prev)*100;
       }
-      return { ...bill, usageChange: usageChange.toFixed(1) };
+      return { ...bill, usageChange:usageChange.toFixed(1) };
     });
   }, [filteredData, sortConfig]);
 
   const paginatedData = useMemo(() => {
-    const start = (currentPage - 1) * rowsPerPage;
-    return tableData.slice(start, start + rowsPerPage);
+    const start = (currentPage-1)*rowsPerPage;
+    return tableData.slice(start, start+rowsPerPage);
   }, [tableData, currentPage]);
-  const totalPages = Math.ceil(tableData.length / rowsPerPage);
+  const totalPages = Math.ceil(tableData.length/rowsPerPage);
 
-  const handleSort = (key) => {
-    setSortConfig(prev => ({ key, direction: prev.key === key && prev.direction === "ascending" ? "descending" : "ascending" }));
-  };
+  const handleSort = (key) =>
+    setSortConfig(prev => ({ key, direction:prev.key===key && prev.direction==="ascending" ? "descending" : "ascending" }));
 
   const insights = useMemo(() => {
     const list = [];
-    if (!filteredData.length) { list.push({ type: "info", text: "No data available for the selected filters." }); return list; }
-    const elecBills = filteredData.filter(b => b.utilityType === "Electricity");
+    if (!filteredData.length) { list.push({ type:"info", text:"No data available for the selected filters." }); return list; }
+    const elecBills = filteredData.filter(b => b.utilityType==="Electricity");
     if (elecBills.length >= 2) {
-      const sorted = [...elecBills].sort((a, b) => monthOrder.indexOf(b.billingMonth.split(" ")[0]) - monthOrder.indexOf(a.billingMonth.split(" ")[0]));
-      const latest = sorted[0];
-      const prev   = sorted.find(b => {
-        const [bm, by] = b.billingMonth.split(" ");
-        const [lm, ly] = latest.billingMonth.split(" ");
-        return by === ly && monthOrder.indexOf(bm) === monthOrder.indexOf(lm) - 1;
+      const s = [...elecBills].sort((a,b) => monthOrder.indexOf(b.billingMonth.split(" ")[0])-monthOrder.indexOf(a.billingMonth.split(" ")[0]));
+      const latest = s[0];
+      const prev   = s.find(b => {
+        const [bm,by] = b.billingMonth.split(" "), [lm,ly] = latest.billingMonth.split(" ");
+        return by===ly && monthOrder.indexOf(bm)===monthOrder.indexOf(lm)-1;
       });
       if (prev) {
-        const pct = ((latest.unitsUsed - prev.unitsUsed) / prev.unitsUsed) * 100;
-        list.push({ type: pct > 0 ? "warning" : "success", text: `Electricity usage ${pct > 0 ? "increased" : "decreased"} by ${Math.abs(pct).toFixed(1)}% compared to last month.` });
+        const pct = ((latest.unitsUsed-prev.unitsUsed)/prev.unitsUsed)*100;
+        list.push({ type:pct>0?"warning":"success", text:`Electricity usage ${pct>0?"increased":"decreased"} by ${Math.abs(pct).toFixed(1)}% compared to last month.` });
       }
     }
-    const waterBills = filteredData.filter(b => b.utilityType === "Water");
+    const waterBills = filteredData.filter(b => b.utilityType==="Water");
     if (waterBills.length >= 3) {
-      const sw = [...waterBills].sort((a, b) => monthOrder.indexOf(a.billingMonth.split(" ")[0]) - monthOrder.indexOf(b.billingMonth.split(" ")[0]));
-      let inc = true, dec = true;
-      for (let i = 1; i < sw.length; i++) {
-        if (sw[i].unitsUsed < sw[i-1].unitsUsed) inc = false;
-        if (sw[i].unitsUsed > sw[i-1].unitsUsed) dec = false;
+      const sw = [...waterBills].sort((a,b) => monthOrder.indexOf(a.billingMonth.split(" ")[0])-monthOrder.indexOf(b.billingMonth.split(" ")[0]));
+      let inc=true, dec=true;
+      for (let i=1; i<sw.length; i++) {
+        if (sw[i].unitsUsed < sw[i-1].unitsUsed) inc=false;
+        if (sw[i].unitsUsed > sw[i-1].unitsUsed) dec=false;
       }
-      if (inc) list.push({ type: "warning", text: "Water consumption has been steadily increasing over the selected period." });
-      else if (dec) list.push({ type: "success", text: "Water consumption has been steadily decreasing over the selected period — great progress!" });
+      if (inc) list.push({ type:"warning", text:"Water consumption has been steadily increasing over the selected period." });
+      else if (dec) list.push({ type:"success", text:"Water consumption has been steadily decreasing — great progress!" });
     }
-    const highest = filteredData.reduce((max, b) => b.billAmount > max.billAmount ? b : max, filteredData[0]);
-    list.push({ type: "info", text: `Peak expenditure was in ${highest.billingMonth} at LKR ${highest.billAmount.toLocaleString()}.` });
+    const highest = filteredData.reduce((max,b) => b.billAmount>max.billAmount?b:max, filteredData[0]);
+    list.push({ type:"info", text:`Peak expenditure was in ${highest.billingMonth} at Rs. ${highest.billAmount.toLocaleString()}.` });
     return list;
   }, [filteredData]);
 
   const exportToCSV = () => {
     const rows = [
-      [`Report — ${timeRange === "Monthly" ? selectedMonth : timeRange === "Quarterly" ? selectedQuarter : selectedYear}`],
+      [`Report — ${timeRange==="Monthly"?selectedMonth:timeRange==="Quarterly"?selectedQuarter:selectedYear}`],
       [],
-      ["Utility Type","Billing Month","Units Used","Bill Amount (LKR)"],
+      ["Utility Type","Billing Month","Units Used","Bill Amount (Rs.)"],
       ...filteredData.map(b => [b.utilityType, b.billingMonth, b.unitsUsed, b.billAmount]),
     ];
     const csv  = rows.map(r => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
-    a.href = url; a.download = `utility_report_${new Date().toISOString().split("T")[0]}.csv`;
-    a.style.display = "none"; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    a.href=url; a.download=`utility_report_${new Date().toISOString().split("T")[0]}.csv`;
+    a.style.display="none"; document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
-  const sortArrow = (key) => sortConfig.key === key ? (sortConfig.direction === "ascending" ? " ↑" : " ↓") : "";
+  const sortArrow = (key) => sortConfig.key===key ? (sortConfig.direction==="ascending" ? " ↑" : " ↓") : "";
 
+  /* ── filter toggle helper ── */
+  const ToggleGroup = ({ options, value, onChange }) => (
+    <div style={{ display:"flex", background:C.card, border:`1px solid ${C.border}`,
+      borderRadius:9, padding:3, gap:2 }}>
+      {options.map(opt => (
+        <button key={opt} className={`r-toggle${value===opt?" active":""}`}
+          onClick={() => onChange(opt)}
+          style={{ padding:"5px 12px", borderRadius:7, border:"none", fontFamily:F,
+            fontSize:"0.78rem", fontWeight:600, cursor:"pointer", transition:"all .15s",
+            background: value===opt ? C.blueL : "transparent",
+            color:       value===opt ? C.blue  : C.muted }}>
+          {opt}
+        </button>
+      ))}
+    </div>
+  );
+
+  const insightStyle = {
+    success: { bg:C.greenL,  bdr:C.greenM,  accent:C.green,  icon:<FiCheckCircle size={15}/> },
+    warning: { bg:C.amberL,  bdr:C.amberM,  accent:C.amber,  icon:<FiAlertTriangle size={15}/> },
+    info:    { bg:C.blueL,   bdr:C.blueM,   accent:C.blue,   icon:<FiInfo size={15}/> },
+  };
+
+  /* ════ RENDER ════ */
   return (
-    <div className="rpt-root">
-      {/* ── Page Header ─────────────────────────────────────────── */}
-      <header className="rpt-header">
-        <div className="rpt-header-text">
-          <p className="rpt-eyebrow">Analytics Dashboard</p>
-          <h1 className="rpt-title">Utility Reports</h1>
-          <p className="rpt-subtitle">Track, analyze, and optimize your consumption patterns</p>
+    <div style={{ minHeight:"100vh", background:C.page, fontFamily:F,
+      color:C.ink, padding:"28px 32px 64px" }}>
+
+      {/* ── HEADER ── */}
+      <header className="r-fu r-fu1" style={{ display:"flex", alignItems:"flex-end",
+        justifyContent:"space-between", marginBottom:28, paddingBottom:24,
+        borderBottom:`1px solid ${C.border}`, flexWrap:"wrap", gap:16 }}>
+        <div>
+          <h1 style={{ fontSize:"1.75rem", fontWeight:800, color:C.ink,
+            margin:"0 0 5px", letterSpacing:"-0.03em" }}>
+            Utility Reports
+          </h1>
+          <p style={{ fontSize:"0.875rem", color:C.muted, margin:0 }}>
+            Track, analyze, and optimize your consumption patterns
+          </p>
         </div>
-        <button className="rpt-export-btn" onClick={exportToCSV}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          Export CSV
+        <button className="r-export" onClick={exportToCSV}
+          style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 18px",
+            borderRadius:9, background:C.card, border:`1px solid ${C.borderB}`,
+            color:C.muted, fontFamily:F, fontSize:"0.8rem", fontWeight:600,
+            cursor:"pointer", transition:"all .18s", whiteSpace:"nowrap" }}>
+          <FiDownload size={14}/> Export CSV
         </button>
       </header>
 
-      {/* ── Filters ─────────────────────────────────────────────── */}
-      <section className="rpt-filters">
-        <div className="rpt-filter-pill">
-          <label>Utility</label>
-          <div className="rpt-toggle-group">
-            {["Both","Electricity","Water"].map(v => (
-              <button key={v} className={`rpt-toggle ${utilityFilter === v ? "active" : ""}`} onClick={() => setUtilityFilter(v)}>{v}</button>
-            ))}
-          </div>
+      {/* ── FILTERS ── */}
+      <section className="r-fu r-fu2" style={{ display:"flex", flexWrap:"wrap",
+        gap:12, marginBottom:28, alignItems:"center" }}>
+
+        {/* Utility */}
+        <div style={{ display:"flex", alignItems:"center", gap:10,
+          background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 14px" }}>
+          <label style={{ fontSize:"0.68rem", fontWeight:700, textTransform:"uppercase",
+            letterSpacing:"0.08em", color:C.muted, whiteSpace:"nowrap" }}>Utility</label>
+          <ToggleGroup options={["Both","Electricity","Water"]} value={utilityFilter} onChange={v => setUtilityFilter(v)}/>
         </div>
-        <div className="rpt-filter-pill">
-          <label>Time Range</label>
-          <div className="rpt-toggle-group">
-            {["Monthly","Quarterly","Yearly"].map(v => (
-              <button key={v} className={`rpt-toggle ${timeRange === v ? "active" : ""}`} onClick={() => setTimeRange(v)}>{v}</button>
-            ))}
-          </div>
+
+        {/* Time Range */}
+        <div style={{ display:"flex", alignItems:"center", gap:10,
+          background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 14px" }}>
+          <label style={{ fontSize:"0.68rem", fontWeight:700, textTransform:"uppercase",
+            letterSpacing:"0.08em", color:C.muted, whiteSpace:"nowrap" }}>Time Range</label>
+          <ToggleGroup options={["Monthly","Quarterly","Yearly"]} value={timeRange} onChange={v => setTimeRange(v)}/>
         </div>
+
+        {/* Contextual select */}
         {timeRange === "Monthly" && (
-          <div className="rpt-filter-pill">
-            <label>Month</label>
-            <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}>
-              {availableMonths.map(m => <option key={m}>{m}</option>)}
-            </select>
+          <div style={{ display:"flex", alignItems:"center", gap:10,
+            background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 14px" }}>
+            <label style={{ fontSize:"0.68rem", fontWeight:700, textTransform:"uppercase",
+              letterSpacing:"0.08em", color:C.muted }}>Month</label>
+            <div style={{ position:"relative" }}>
+              <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
+                style={{ background:"transparent", border:"none", color:C.body,
+                  fontFamily:F, fontSize:"0.82rem", fontWeight:500,
+                  cursor:"pointer", outline:"none", padding:"2px 20px 2px 4px", appearance:"none" }}>
+                {availableMonths.map(m => <option key={m}>{m}</option>)}
+              </select>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.faint}
+                strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                style={{ position:"absolute", right:0, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
           </div>
         )}
         {timeRange === "Quarterly" && (
-          <div className="rpt-filter-pill">
-            <label>Quarter</label>
-            <select value={selectedQuarter} onChange={e => setSelectedQuarter(e.target.value)}>
-              {availableQuarters.map(q => <option key={q}>{q}</option>)}
-            </select>
+          <div style={{ display:"flex", alignItems:"center", gap:10,
+            background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 14px" }}>
+            <label style={{ fontSize:"0.68rem", fontWeight:700, textTransform:"uppercase",
+              letterSpacing:"0.08em", color:C.muted }}>Quarter</label>
+            <div style={{ position:"relative" }}>
+              <select value={selectedQuarter} onChange={e => setSelectedQuarter(e.target.value)}
+                style={{ background:"transparent", border:"none", color:C.body,
+                  fontFamily:F, fontSize:"0.82rem", fontWeight:500,
+                  cursor:"pointer", outline:"none", padding:"2px 20px 2px 4px", appearance:"none" }}>
+                {availableQuarters.map(q => <option key={q}>{q}</option>)}
+              </select>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.faint}
+                strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                style={{ position:"absolute", right:0, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
           </div>
         )}
         {timeRange === "Yearly" && (
-          <div className="rpt-filter-pill">
-            <label>Year</label>
-            <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)}>
-              {availableYears.map(y => <option key={y}>{y}</option>)}
-            </select>
+          <div style={{ display:"flex", alignItems:"center", gap:10,
+            background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 14px" }}>
+            <label style={{ fontSize:"0.68rem", fontWeight:700, textTransform:"uppercase",
+              letterSpacing:"0.08em", color:C.muted }}>Year</label>
+            <div style={{ position:"relative" }}>
+              <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)}
+                style={{ background:"transparent", border:"none", color:C.body,
+                  fontFamily:F, fontSize:"0.82rem", fontWeight:500,
+                  cursor:"pointer", outline:"none", padding:"2px 20px 2px 4px", appearance:"none" }}>
+                {availableYears.map(y => <option key={y}>{y}</option>)}
+              </select>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.faint}
+                strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                style={{ position:"absolute", right:0, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
           </div>
         )}
       </section>
 
-      {/* ── KPI Cards ───────────────────────────────────────────── */}
-      <section className="rpt-kpis">
-        <div className="rpt-kpi rpt-kpi--amber">
-          <div className="rpt-kpi-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+      {/* ── KPI CARDS — original 4 cards ── */}
+      <section className="r-fu r-fu3" style={{ display:"grid",
+        gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:28 }}>
+        {[
+          { label:"Total Units Consumed", value:animatedValues.units.toLocaleString(),    sub:utilityFilter==="Both"?"All utilities":utilityFilter, icon:<FiZap size={18}/>,        accent:C.amber,  bg:C.amberL,  bdr:C.amberM  },
+          { label:"Total Amount Spent",   value:`Rs. ${animatedValues.amount.toLocaleString()}`, sub:`${timeRange} period`,                          icon:<FiGrid size={18}/>,       accent:C.teal,   bg:C.tealL,   bdr:C.tealM   },
+          { label:"Avg Monthly Cost",     value:`Rs. ${animatedValues.avg.toLocaleString()}`,    sub:"Calculated average",                           icon:<FiDollarSign size={18}/>, accent:C.violet, bg:C.violetL, bdr:C.violetM },
+          { label:"Peak Consumption",     value:summaryMetrics.highestConsumptionMonth,          sub:"Highest usage period",                         icon:<FiTrendingUp size={18}/>, accent:C.red,    bg:C.redL,    bdr:C.redM    },
+        ].map((k,i) => (
+          <div key={i} className="r-kpi"
+            style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14,
+              padding:"20px 22px", display:"flex", gap:16, alignItems:"flex-start",
+              position:"relative", overflow:"hidden", boxShadow:C.s1,
+              transition:"transform .2s ease, box-shadow .2s ease" }}>
+            {/* colored top bar */}
+            <div style={{ position:"absolute", top:0, left:0, right:0, height:3,
+              background:`linear-gradient(90deg,${k.accent},transparent)`, borderRadius:"14px 14px 0 0" }}/>
+            <div style={{ width:40, height:40, borderRadius:10, display:"flex",
+              alignItems:"center", justifyContent:"center", flexShrink:0,
+              background:k.bg, color:k.accent }}>{k.icon}</div>
+            <div>
+              <p style={{ fontSize:"0.68rem", fontWeight:700, textTransform:"uppercase",
+                letterSpacing:"0.07em", color:C.muted, margin:"0 0 5px" }}>{k.label}</p>
+              <p style={{ fontSize:"1.35rem", fontWeight:800, color:C.ink,
+                margin:"0 0 3px", letterSpacing:"-0.02em" }}>{k.value}</p>
+              <p style={{ fontSize:"0.7rem", color:C.faint, margin:0 }}>{k.sub}</p>
+            </div>
           </div>
-          <div>
-            <p className="rpt-kpi-label">Total Units Consumed</p>
-            <p className="rpt-kpi-value">{animatedValues.units.toLocaleString()}</p>
-            <p className="rpt-kpi-sub">{utilityFilter === "Both" ? "All utilities" : utilityFilter}</p>
-          </div>
-        </div>
-        <div className="rpt-kpi rpt-kpi--sky">
-          <div className="rpt-kpi-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
-          </div>
-          <div>
-            <p className="rpt-kpi-label">Total Amount Spent</p>
-            <p className="rpt-kpi-value">LKR {animatedValues.amount.toLocaleString()}</p>
-            <p className="rpt-kpi-sub">{timeRange} period</p>
-          </div>
-        </div>
-        <div className="rpt-kpi rpt-kpi--violet">
-          <div className="rpt-kpi-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-          </div>
-          <div>
-            <p className="rpt-kpi-label">Avg Monthly Cost</p>
-            <p className="rpt-kpi-value">LKR {animatedValues.avg.toLocaleString()}</p>
-            <p className="rpt-kpi-sub">Calculated average</p>
-          </div>
-        </div>
-        <div className="rpt-kpi rpt-kpi--rose">
-          <div className="rpt-kpi-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><polyline points="22 7 13.5 15.5 8.5 10.5 2 17"/><polyline points="16 7 22 7 22 13"/></svg>
-          </div>
-          <div>
-            <p className="rpt-kpi-label">Peak Consumption</p>
-            <p className="rpt-kpi-value">{summaryMetrics.highestConsumptionMonth}</p>
-            <p className="rpt-kpi-sub">Highest usage period</p>
-          </div>
-        </div>
+        ))}
       </section>
 
-      {/* ── Charts Grid ─────────────────────────────────────────── */}
-      <section className="rpt-charts">
-        {/* Area chart — usage over time */}
-        <div className="rpt-chart-card rpt-chart-wide">
-          <div className="rpt-chart-head">
+      {/* ── CHARTS GRID — original 3 charts ── */}
+      <section className="r-fu r-fu4" style={{ display:"grid",
+        gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:28 }}>
+
+        {/* Area chart — usage over time — spans full width */}
+        <div className="r-chart"
+          style={{ gridColumn:"1/-1", background:C.card, border:`1px solid ${C.border}`,
+            borderRadius:14, padding:"22px 24px 18px", boxShadow:C.s1,
+            transition:"transform .2s ease, box-shadow .2s ease" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start",
+            flexWrap:"wrap", gap:12, marginBottom:18 }}>
             <div>
-              <h3>Consumption Over Time</h3>
-              <p>Monthly unit usage across utilities</p>
+              <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>Consumption Over Time</h3>
+              <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>Monthly unit usage across utilities</p>
             </div>
-            <div className="rpt-legend">
-              {(utilityFilter === "Both" || utilityFilter === "Electricity") && <span className="rpt-legend-dot rpt-legend-elec" />}
-              {(utilityFilter === "Both" || utilityFilter === "Electricity") && <span style={{fontSize:"0.75rem",color:"#94a3b8"}}>Electricity</span>}
-              {(utilityFilter === "Both" || utilityFilter === "Water")       && <span className="rpt-legend-dot rpt-legend-water" />}
-              {(utilityFilter === "Both" || utilityFilter === "Water")       && <span style={{fontSize:"0.75rem",color:"#94a3b8"}}>Water</span>}
+            <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+              {(utilityFilter==="Both"||utilityFilter==="Electricity") && (
+                <span style={{ display:"flex", alignItems:"center", gap:5,
+                  fontSize:"0.72rem", color:C.muted }}>
+                  <span style={{ width:8, height:8, borderRadius:"50%", background:C.amber, display:"inline-block" }}/>
+                  Electricity
+                </span>
+              )}
+              {(utilityFilter==="Both"||utilityFilter==="Water") && (
+                <span style={{ display:"flex", alignItems:"center", gap:5,
+                  fontSize:"0.72rem", color:C.muted }}>
+                  <span style={{ width:8, height:8, borderRadius:"50%", background:C.teal, display:"inline-block" }}/>
+                  Water
+                </span>
+              )}
             </div>
           </div>
           <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={usageOverTimeData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
+            <AreaChart data={usageOverTimeData} margin={{ top:10, right:20, left:0, bottom:0 }}>
               <defs>
-                <linearGradient id="gradElec" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#d97706" stopOpacity={0.15}/>
-                  <stop offset="95%" stopColor="#d97706" stopOpacity={0}/>
+                <linearGradient id="rgE" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor={C.amber} stopOpacity={0.15}/>
+                  <stop offset="95%" stopColor={C.amber} stopOpacity={0}/>
                 </linearGradient>
-                <linearGradient id="gradWater" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor="#0284c7" stopOpacity={0.15}/>
-                  <stop offset="95%" stopColor="#0284c7" stopOpacity={0}/>
+                <linearGradient id="rgW" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor={C.teal} stopOpacity={0.15}/>
+                  <stop offset="95%" stopColor={C.teal} stopOpacity={0}/>
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-              <XAxis dataKey="month" tick={{ fill: "#94a3b8", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip />} />
-              {(utilityFilter === "Both" || utilityFilter === "Electricity") && <Area type="monotone" dataKey="Electricity" stroke="#d97706" strokeWidth={2} fill="url(#gradElec)" dot={false} />}
-              {(utilityFilter === "Both" || utilityFilter === "Water")       && <Area type="monotone" dataKey="Water"       stroke="#0284c7" strokeWidth={2} fill="url(#gradWater)" dot={false} />}
-              {utilityFilter !== "Both" && <Area type="monotone" dataKey="units" name="Units Used" stroke="#d97706" strokeWidth={2} fill="url(#gradElec)" dot={false} />}
+              <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
+              <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
+              <YAxis tick={ax} axisLine={false} tickLine={false}/>
+              <Tooltip content={<CustomTooltip/>}/>
+              {(utilityFilter==="Both"||utilityFilter==="Electricity") &&
+                <Area type="monotone" dataKey="Electricity" stroke={C.amber} strokeWidth={2} fill="url(#rgE)" dot={false}/>}
+              {(utilityFilter==="Both"||utilityFilter==="Water") &&
+                <Area type="monotone" dataKey="Water" stroke={C.teal} strokeWidth={2} fill="url(#rgW)" dot={false}/>}
+              {utilityFilter !== "Both" &&
+                <Area type="monotone" dataKey="units" name="Units Used" stroke={C.amber} strokeWidth={2} fill="url(#rgE)" dot={false}/>}
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
         {/* Bar chart — monthly expenses */}
-        <div className="rpt-chart-card">
-          <div className="rpt-chart-head">
-            <div>
-              <h3>Monthly Expenses</h3>
-              <p>Total spend per month (LKR)</p>
-            </div>
+        <div className="r-chart"
+          style={{ background:C.card, border:`1px solid ${C.border}`,
+            borderRadius:14, padding:"22px 24px 18px", boxShadow:C.s1,
+            transition:"transform .2s ease, box-shadow .2s ease" }}>
+          <div style={{ marginBottom:18 }}>
+            <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>Monthly Expenses</h3>
+            <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>Total spend per month (Rs.)</p>
           </div>
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={monthlyExpensesData} barSize={22} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-              <XAxis dataKey="month" tick={{ fill: "#94a3b8", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "#94a3b8", fontSize: 11 }} axisLine={false} tickLine={false} />
-              <Tooltip content={<CustomTooltip prefix="LKR " />} />
+            <BarChart data={monthlyExpensesData} barSize={22} margin={{ top:10, right:10, left:0, bottom:0 }}>
+              <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
+              <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
+              <YAxis tick={ax} axisLine={false} tickLine={false}/>
+              <Tooltip content={<CustomTooltip prefix="Rs. "/>}/>
               {utilityFilter === "Both" ? (
                 <>
-                  <Bar dataKey="electricity" name="Electricity" stackId="a" fill="#d97706" radius={[0,0,0,0]} />
-                  <Bar dataKey="water"       name="Water"       stackId="a" fill="#0284c7" radius={[4,4,0,0]} />
+                  <Bar dataKey="electricity" name="Electricity" stackId="a" fill={C.amber} radius={[0,0,0,0]}/>
+                  <Bar dataKey="water"       name="Water"       stackId="a" fill={C.teal}  radius={[4,4,0,0]}/>
                 </>
               ) : (
-                <Bar dataKey="expenses" name="Expenses" fill="#d97706" radius={[4,4,0,0]}>
-                  {monthlyExpensesData.map((_, i) => (
-                    <Cell key={i} fill={`rgba(217,119,6,${0.4 + 0.6 * (i / monthlyExpensesData.length)})`} />
+                <Bar dataKey="expenses" name="Expenses" fill={C.blue} radius={[4,4,0,0]}>
+                  {monthlyExpensesData.map((_,i) => (
+                    <Cell key={i} fill={`rgba(37,99,235,${0.4+0.6*(i/monthlyExpensesData.length)})`}/>
                   ))}
                 </Bar>
               )}
@@ -404,34 +534,37 @@ const Report = () => {
           </ResponsiveContainer>
         </div>
 
-        {/* Pie chart — distribution */}
+        {/* Pie chart — distribution (original conditional) */}
         {utilityFilter === "Both" && (
-          <div className="rpt-chart-card rpt-chart-pie">
-            <div className="rpt-chart-head">
-              <div>
-                <h3>Spend Distribution</h3>
-                <p>Total cost by utility type</p>
-              </div>
+          <div className="r-chart"
+            style={{ background:C.card, border:`1px solid ${C.border}`,
+              borderRadius:14, padding:"22px 24px 18px", boxShadow:C.s1,
+              transition:"transform .2s ease, box-shadow .2s ease" }}>
+            <div style={{ marginBottom:18 }}>
+              <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>Spend Distribution</h3>
+              <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>Total cost by utility type</p>
             </div>
-            <div className="rpt-pie-wrapper">
+            <div style={{ display:"flex", alignItems:"center", gap:24 }}>
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
                   <Pie data={utilityDistributionData} cx="50%" cy="50%" innerRadius={60} outerRadius={90}
                     dataKey="value" startAngle={90} endAngle={-270} paddingAngle={3}>
-                    {utilityDistributionData.map((entry, i) => (
-                      <Cell key={i} fill={entry.color} stroke="none" />
-                    ))}
+                    {utilityDistributionData.map((e,i) => <Cell key={i} fill={e.color} stroke="none"/>)}
                   </Pie>
-                  <Tooltip formatter={(v) => [`LKR ${v.toLocaleString()}`, "Spend"]} contentStyle={{ background: "#ffffff", border: "1px solid #e2e8f0", borderRadius: "8px", color: "#0f172a", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }} />
+                  <Tooltip formatter={v => [`Rs. ${v.toLocaleString()}`, "Spend"]}
+                    contentStyle={{ background:C.card, border:`1px solid ${C.border}`,
+                      borderRadius:9, color:C.ink, boxShadow:C.s3, fontFamily:F }}/>
                 </PieChart>
               </ResponsiveContainer>
-              <div className="rpt-pie-legend">
-                {utilityDistributionData.map((d, i) => (
-                  <div key={i} className="rpt-pie-item">
-                    <span className="rpt-pie-dot" style={{ background: d.color }} />
+              <div style={{ display:"flex", flexDirection:"column", gap:16, flex:1 }}>
+                {utilityDistributionData.map((d,i) => (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:10 }}>
+                    <span style={{ width:10, height:10, borderRadius:"50%",
+                      background:d.color, flexShrink:0 }}/>
                     <div>
-                      <p className="rpt-pie-name">{d.name}</p>
-                      <p className="rpt-pie-val">LKR {d.value.toLocaleString()}</p>
+                      <p style={{ fontSize:"0.75rem", color:C.muted, margin:"0 0 2px", fontWeight:500 }}>{d.name}</p>
+                      <p style={{ fontSize:"0.9rem", fontWeight:700, color:C.body,
+                        margin:0, fontFamily:"monospace" }}>Rs. {d.value.toLocaleString()}</p>
                     </div>
                   </div>
                 ))}
@@ -441,43 +574,79 @@ const Report = () => {
         )}
       </section>
 
-      {/* ── Data Table ──────────────────────────────────────────── */}
-      <section className="rpt-table-section">
-        <div className="rpt-table-head">
+      {/* ── DATA TABLE — original logic ── */}
+      <section className="r-fu r-fu4" style={{ background:C.card, border:`1px solid ${C.border}`,
+        borderRadius:14, padding:"22px 24px", marginBottom:28, boxShadow:C.s1 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
+          marginBottom:18, flexWrap:"wrap", gap:12 }}>
           <div>
-            <h3>Detailed Records</h3>
-            <p>{filteredData.length} entries found</p>
+            <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>Detailed Records</h3>
+            <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{filteredData.length} entries found</p>
           </div>
         </div>
 
         {filteredData.length === 0 ? (
-          <div className="rpt-empty"><span>📂</span><p>No records match the current filters.</p></div>
+          <div style={{ display:"flex", flexDirection:"column", alignItems:"center",
+            justifyContent:"center", padding:"60px 20px", gap:12, color:C.muted }}>
+            <span style={{ fontSize:"2rem" }}>📂</span>
+            <p style={{ fontSize:"0.875rem", margin:0 }}>No records match the current filters.</p>
+          </div>
         ) : (
           <>
-            <div className="rpt-table-wrap">
-              <table className="rpt-table">
+            <div style={{ overflowX:"auto" }}>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
                 <thead>
                   <tr>
-                    {[["billingMonth","Month"],["utilityType","Utility"],["unitsUsed","Units Used"],["billAmount","Bill Amount"],["usageChange","Change"]].map(([key, label]) => (
-                      <th key={key} onClick={() => handleSort(key)}>
-                        {label}<span className="sort-arrow">{sortArrow(key)}</span>
+                    {[["billingMonth","Month"],["utilityType","Utility"],["unitsUsed","Units Used"],["billAmount","Bill Amount"],["usageChange","Change"]].map(([key,label]) => (
+                      <th key={key} className="r-th"
+                        onClick={() => handleSort(key)}
+                        style={{ padding:"10px 14px", textAlign:"left", fontSize:"0.68rem",
+                          fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em",
+                          color:C.muted, borderBottom:`1px solid ${C.border}`,
+                          cursor:"pointer", userSelect:"none", whiteSpace:"nowrap",
+                          transition:"color .15s", fontFamily:F }}>
+                        {label}
+                        <span style={{ color:C.amber, marginLeft:4 }}>{sortArrow(key)}</span>
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedData.map((bill) => (
-                    <tr key={bill.id}>
-                      <td><span className="rpt-month-badge">{bill.billingMonth}</span></td>
-                      <td>
-                        <span className={`rpt-utility-badge ${bill.utilityType === "Electricity" ? "elec" : "water"}`}>
-                          {bill.utilityType === "Electricity" ? "⚡" : "💧"} {bill.utilityType}
+                  {paginatedData.map(bill => (
+                    <tr key={bill.id} className="r-tr"
+                      style={{ transition:"background .15s" }}>
+                      <td style={{ padding:"13px 14px", fontSize:"0.82rem", color:C.body,
+                        borderBottom:`1px solid ${C.border}`, verticalAlign:"middle" }}>
+                        <span style={{ fontFamily:"monospace", fontSize:"0.78rem", color:C.muted }}>
+                          {bill.billingMonth}
                         </span>
                       </td>
-                      <td><strong>{bill.unitsUsed}</strong> units</td>
-                      <td className="rpt-amount">LKR {bill.billAmount.toLocaleString()}</td>
-                      <td>
-                        <span className={`rpt-change ${bill.usageChange > 0 ? "up" : bill.usageChange < 0 ? "down" : "neutral"}`}>
+                      <td style={{ padding:"13px 14px", fontSize:"0.82rem", color:C.body,
+                        borderBottom:`1px solid ${C.border}`, verticalAlign:"middle" }}>
+                        <span style={{ display:"inline-flex", alignItems:"center", gap:5,
+                          padding:"3px 10px", borderRadius:20, fontSize:"0.75rem", fontWeight:600,
+                          background: bill.utilityType==="Electricity" ? C.amberL : C.tealL,
+                          color:      bill.utilityType==="Electricity" ? C.amber  : C.teal }}>
+                          {bill.utilityType==="Electricity" ? <FiZap size={11}/> : <FiDroplet size={11}/>}
+                          {bill.utilityType}
+                        </span>
+                      </td>
+                      <td style={{ padding:"13px 14px", fontSize:"0.82rem", color:C.body,
+                        borderBottom:`1px solid ${C.border}`, verticalAlign:"middle" }}>
+                        <strong>{bill.unitsUsed}</strong> units
+                      </td>
+                      <td style={{ padding:"13px 14px", fontSize:"0.82rem",
+                        borderBottom:`1px solid ${C.border}`, verticalAlign:"middle",
+                        fontFamily:"monospace", color:C.ink, fontWeight:500 }}>
+                        Rs. {bill.billAmount.toLocaleString()}
+                      </td>
+                      <td style={{ padding:"13px 14px", fontSize:"0.82rem",
+                        borderBottom:`1px solid ${C.border}`, verticalAlign:"middle" }}>
+                        <span style={{ display:"inline-flex", alignItems:"center", gap:3,
+                          padding:"3px 9px", borderRadius:20, fontSize:"0.75rem",
+                          fontWeight:600, fontFamily:"monospace",
+                          background: bill.usageChange > 0 ? C.redL  : bill.usageChange < 0 ? C.greenL : C.hover,
+                          color:      bill.usageChange > 0 ? C.red   : bill.usageChange < 0 ? C.green  : C.muted }}>
                           {bill.usageChange > 0 ? "↑" : bill.usageChange < 0 ? "↓" : "–"} {Math.abs(bill.usageChange)}%
                         </span>
                       </td>
@@ -486,38 +655,74 @@ const Report = () => {
                 </tbody>
               </table>
             </div>
-            <div className="rpt-pagination">
-              <button onClick={() => setCurrentPage(p => Math.max(p-1,1))} disabled={currentPage===1} className="rpt-page-btn">← Prev</button>
-              <div className="rpt-page-dots">
-                {Array.from({length: totalPages}).map((_,i) => (
-                  <button key={i} className={`rpt-page-dot ${currentPage===i+1?"active":""}`} onClick={() => setCurrentPage(i+1)}>{i+1}</button>
+
+            {/* Pagination — original logic */}
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"center",
+              gap:10, marginTop:18, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
+              <button className="r-pageBtn"
+                onClick={() => setCurrentPage(p => Math.max(p-1,1))}
+                disabled={currentPage===1}
+                style={{ padding:"7px 14px", borderRadius:7, border:`1px solid ${C.border}`,
+                  background:"transparent", color:C.muted, fontFamily:F, fontSize:"0.78rem",
+                  cursor:currentPage===1?"not-allowed":"pointer",
+                  opacity:currentPage===1?0.3:1, transition:"all .15s" }}>
+                ← Prev
+              </button>
+              <div style={{ display:"flex", gap:4 }}>
+                {Array.from({ length:totalPages }).map((_,i) => (
+                  <button key={i} className={`r-pageDot${currentPage===i+1?" active":""}`}
+                    onClick={() => setCurrentPage(i+1)}
+                    style={{ width:30, height:30, borderRadius:7, border:`1px solid ${C.border}`,
+                      background: currentPage===i+1 ? C.blueL : "transparent",
+                      color:      currentPage===i+1 ? C.blue  : C.muted,
+                      borderColor:currentPage===i+1 ? C.blue  : C.border,
+                      fontFamily:F, fontSize:"0.78rem", cursor:"pointer",
+                      display:"flex", alignItems:"center", justifyContent:"center",
+                      transition:"all .15s" }}>
+                    {i+1}
+                  </button>
                 ))}
               </div>
-              <button onClick={() => setCurrentPage(p => Math.min(p+1,totalPages))} disabled={currentPage===totalPages} className="rpt-page-btn">Next →</button>
+              <button className="r-pageBtn"
+                onClick={() => setCurrentPage(p => Math.min(p+1,totalPages))}
+                disabled={currentPage===totalPages}
+                style={{ padding:"7px 14px", borderRadius:7, border:`1px solid ${C.border}`,
+                  background:"transparent", color:C.muted, fontFamily:F, fontSize:"0.78rem",
+                  cursor:currentPage===totalPages?"not-allowed":"pointer",
+                  opacity:currentPage===totalPages?0.3:1, transition:"all .15s" }}>
+                Next →
+              </button>
             </div>
           </>
         )}
       </section>
 
-      {/* ── Insights ────────────────────────────────────────────── */}
-      <section className="rpt-insights">
-        <div className="rpt-insights-head">
-          <h3>AI Insights</h3>
-          <p>Automated analysis of your utility patterns</p>
+      {/* ── INSIGHTS — original logic ── */}
+      <section className="r-fu r-fu5" style={{ background:C.card, border:`1px solid ${C.border}`,
+        borderRadius:14, padding:"22px 24px", boxShadow:C.s1 }}>
+        <div style={{ marginBottom:16 }}>
+          <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>AI Insights</h3>
+          <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>Automated analysis of your utility patterns</p>
         </div>
-        <div className="rpt-insights-grid">
-          {insights.map((ins, i) => (
-            <div key={i} className={`rpt-insight rpt-insight--${ins.type}`}>
-              <div className="rpt-insight-icon">
-                {ins.type === "success" && "✓"}
-                {ins.type === "warning" && "!"}
-                {ins.type === "info"    && "i"}
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:12 }}>
+          {insights.map((ins,i) => {
+            const ic = insightStyle[ins.type] || insightStyle.info;
+            return (
+              <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:12,
+                padding:"13px 16px", borderRadius:10,
+                background:ic.bg, border:`1px solid ${ic.bdr}` }}>
+                <div style={{ width:22, height:22, borderRadius:"50%", display:"flex",
+                  alignItems:"center", justifyContent:"center", flexShrink:0,
+                  background:`${ic.accent}22`, color:ic.accent }}>
+                  {ic.icon}
+                </div>
+                <p style={{ margin:0, fontSize:"0.8rem", lineHeight:1.55, color:C.body }}>{ins.text}</p>
               </div>
-              <p>{ins.text}</p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </section>
+
     </div>
   );
 };
