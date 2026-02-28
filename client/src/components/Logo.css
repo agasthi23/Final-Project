@@ -1,0 +1,177 @@
+/* src/components/Logo.css */
+
+/* Main container for the logo icon and text */
+.logo-container {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  position: relative;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  cursor: pointer;
+}
+
+/* Wrapper for the logo elements to enable animations */
+.logo-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+/* Logo icon with enhanced visibility */
+.logo-icon {
+  position: relative;
+  z-index: 3;
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.4));
+}
+
+/* Outer animated ring */
+.logo-outer-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+  animation: rotate 30s linear infinite;
+}
+
+/* Middle animated ring */
+.logo-middle-ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  animation: rotate 20s linear infinite reverse;
+}
+
+/* Animated pulse effect */
+.logo-pulse {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 80%;
+  height: 80%;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.2) 0%, rgba(59, 130, 246, 0) 70%);
+  z-index: 1;
+  animation: pulse 3s ease-in-out infinite;
+}
+
+/* Logo text container */
+.logo-text-container {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* Logo text with enhanced styling */
+.logo-text {
+  font-weight: 700;
+  letter-spacing: -0.8px;
+  color: #F1F5F9; /* Off-white for dark theme */
+  position: relative;
+  transition: all 0.3s ease;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  z-index: 2;
+}
+
+/* Logo text underline */
+.logo-text-underline {
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  height: 3px;
+  width: 0;
+  background: linear-gradient(90deg, #3B82F6, #60A5FA);
+  transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  border-radius: 2px;
+}
+
+/* Hover effects for the entire logo */
+.logo-container:hover .logo-icon {
+  transform: scale(1.1);
+  filter: drop-shadow(0 6px 16px rgba(59, 130, 246, 0.6));
+}
+
+.logo-container:hover .logo-text {
+  color: #ffffff;
+  transform: translateY(-2px);
+}
+
+.logo-container:hover .logo-text-underline {
+  width: 100%;
+}
+
+.logo-container:hover .logo-pulse {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+/* Active state */
+.logo-container.active .logo-icon {
+  transform: scale(1.15);
+  filter: drop-shadow(0 8px 20px rgba(59, 130, 246, 0.7));
+}
+
+.logo-container.active .logo-text {
+  color: #ffffff;
+}
+
+.logo-container.active .logo-text-underline {
+  width: 100%;
+}
+
+/* Variant styles */
+.logo-container.light .logo-text {
+  color: #ffffff;
+}
+
+.logo-container.light .logo-icon {
+  filter: drop-shadow(0 4px 12px rgba(255, 255, 255, 0.3));
+}
+
+/* Animations */
+@keyframes rotate {
+  from {
+    transform: translate(-50%, -50%) rotate(0deg);
+  }
+  to {
+    transform: translate(-50%, -50%) rotate(360deg);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 0.3;
+    transform: translate(-50%, -50%) scale(0.8);
+  }
+  50% {
+    opacity: 0.6;
+    transform: translate(-50%, -50%) scale(1.1);
+  }
+}
+
+/* Size variations */
+@media (max-width: 768px) {
+  .logo-container {
+    gap: 12px;
+  }
+  
+  .logo-text {
+    font-size: 20px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .logo-container {
+    gap: 10px;
+  }
+  
+  .logo-text {
+    font-size: 18px !important;
+  }
+}
