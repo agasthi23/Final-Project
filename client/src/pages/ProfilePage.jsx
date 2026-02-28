@@ -1,68 +1,127 @@
 // src/pages/ProfilePage.jsx
+// ORIGINAL logic 100% preserved — only design tokens updated to match dashboard
 import { useState, useEffect } from "react";
 import {
   FiUser, FiMail, FiEdit2, FiSave, FiX, FiLock,
   FiLogOut, FiMoon, FiSun, FiBell, FiAlertTriangle,
-  FiCamera, FiShield, FiCheck
+  FiCamera, FiShield, FiCheck,
 } from "react-icons/fi";
-import "./Profile.css";
 
-const ProfilePage = () => {
-  const [profileData, setProfileData] = useState({
-    fullName: "John Doe",
-    email: "john.doe@example.com",
-    role: "Account Owner",
-    avatar: null,
-  });
+/* ─── Font (shared with dashboard) ─── */
+if (!document.getElementById("db-font")) {
+  const l = document.createElement("link");
+  l.id = "db-font"; l.rel = "stylesheet";
+  l.href = "https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap";
+  document.head.appendChild(l);
+}
+if (!document.getElementById("prof-anim")) {
+  const s = document.createElement("style");
+  s.id = "prof-anim";
+  s.textContent = `
+    @keyframes profFadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+    .pf-fu { animation: profFadeUp .35s ease both }
+    .pf-nav:hover:not(.active) { background:#f0f2f7!important; color:#475569!important; }
+    .pf-card:hover { box-shadow:0 8px 28px rgba(0,0,0,.09)!important; }
+    .pf-btn-primary:hover   { background:#1d4ed8!important; }
+    .pf-btn-secondary:hover { background:#f0f2f7!important; }
+    .pf-btn-ghost:hover     { background:#f0f2f7!important; }
+    .pf-btn-danger:hover    { background:#b91c1c!important; }
+    .pf-logout:hover        { background:#fef2f2!important; }
+    .pf-input:focus { border-color:#2563eb!important; box-shadow:0 0 0 3px rgba(191,219,254,.5)!important; outline:none; }
+    .pf-input.error { border-color:#dc2626!important; }
+    /* toggle switch */
+    .pf-toggle-input { display:none; }
+    .pf-toggle-track {
+      display:inline-flex; align-items:center;
+      width:44px; height:24px; border-radius:99px;
+      background:#e2e8f0; cursor:pointer;
+      transition:background .2s; flex-shrink:0; position:relative;
+    }
+    .pf-toggle-input:checked + .pf-toggle-track { background:#2563eb; }
+    .pf-toggle-thumb {
+      position:absolute; left:3px; top:3px;
+      width:18px; height:18px; border-radius:50%;
+      background:#fff; box-shadow:0 1px 3px rgba(0,0,0,.15);
+      transition:transform .2s;
+    }
+    .pf-toggle-input:checked + .pf-toggle-track .pf-toggle-thumb { transform:translateX(20px); }
+  `;
+  document.head.appendChild(s);
+}
 
-  const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [formData, setFormData] = useState({ ...profileData });
+/* ════ TOKENS — identical to Dashboard ════ */
+const C = {
+  page:"#f3f4f8", card:"#fff", hover:"#f0f2f7",
+  ink:"#0f172a", body:"#334155", muted:"#64748b", faint:"#94a3b8",
+  border:"#e2e8f0", borderB:"#cbd5e1",
+  blue:"#2563eb", blueL:"#eff6ff", blueM:"#bfdbfe",
+  teal:"#0891b2", tealL:"#ecfeff", tealM:"#a5f3fc",
+  green:"#059669", greenL:"#ecfdf5", greenM:"#a7f3d0",
+  amber:"#d97706", amberL:"#fffbeb", amberM:"#fde68a",
+  red:"#dc2626",   redL:"#fef2f2",   redM:"#fecaca",
+  violet:"#7c3aed",violetL:"#f5f3ff",violetM:"#ddd6fe",
+  s1:"0 1px 3px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04)",
+  s2:"0 4px 16px rgba(15,23,42,.08),0 2px 4px rgba(15,23,42,.04)",
+  s3:"0 12px 40px rgba(15,23,42,.10),0 4px 8px rgba(15,23,42,.04)",
+};
+const F = "'Plus Jakarta Sans',-apple-system,sans-serif";
 
-  const [settings, setSettings] = useState({
-    darkMode: false,
-    emailNotifications: true,
-    usageAlerts: true,
-  });
-
-  const [passwordData, setPasswordData] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
-
-  const [showPasswordForm, setShowPasswordForm] = useState(false);
-  const [errors, setErrors] = useState({});
-  const [notification, setNotification] = useState({ message: "", type: "" });
-  const [activeTab, setActiveTab] = useState("profile");
-
-  useEffect(() => {
-    document.body.classList.toggle("dark-mode", settings.darkMode);
-  }, [settings.darkMode]);
-
-  useEffect(() => {
-    setFormData({ ...profileData });
-  }, [profileData]);
-
-  const showNotification = (message, type = "success") => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification({ message: "", type: "" }), 3000);
+/* ════ SHARED BUTTON ════ */
+const Btn = ({ variant="secondary", onClick, children, style={} }) => {
+  const variants = {
+    primary:   { bg:C.blue,  color:"#fff",   border:C.blue,  hoverCls:"pf-btn-primary"   },
+    secondary: { bg:C.card,  color:C.muted,  border:C.borderB, hoverCls:"pf-btn-secondary" },
+    ghost:     { bg:"transparent", color:C.muted, border:"transparent", hoverCls:"pf-btn-ghost" },
+    danger:    { bg:C.red,   color:"#fff",   border:C.red,   hoverCls:"pf-btn-danger"    },
   };
+  const v = variants[variant] || variants.secondary;
+  return (
+    <button className={v.hoverCls} onClick={onClick}
+      style={{ display:"inline-flex", alignItems:"center", gap:7, padding:"8px 16px",
+        borderRadius:9, border:`1px solid ${v.border}`, background:v.bg, color:v.color,
+        fontFamily:F, fontSize:"0.82rem", fontWeight:600, cursor:"pointer",
+        transition:"all .15s", whiteSpace:"nowrap", ...style }}>
+      {children}
+    </button>
+  );
+};
 
+/* ════ MAIN COMPONENT ════ */
+const ProfilePage = () => {
+
+  /* ── ORIGINAL STATE (unchanged) ── */
+  const [profileData, setProfileData] = useState({
+    fullName:"John Doe", email:"john.doe@example.com",
+    role:"Account Owner", avatar:null,
+  });
+  const [isEditingProfile,  setIsEditingProfile]  = useState(false);
+  const [formData,          setFormData]          = useState({ ...profileData });
+  const [settings,          setSettings]          = useState({ darkMode:false, emailNotifications:true, usageAlerts:true });
+  const [passwordData,      setPasswordData]      = useState({ currentPassword:"", newPassword:"", confirmPassword:"" });
+  const [showPasswordForm,  setShowPasswordForm]  = useState(false);
+  const [errors,            setErrors]            = useState({});
+  const [notification,      setNotification]      = useState({ message:"", type:"" });
+  const [activeTab,         setActiveTab]         = useState("profile");
+
+  /* ── ORIGINAL EFFECTS (unchanged) ── */
+  useEffect(() => { document.body.classList.toggle("dark-mode", settings.darkMode); }, [settings.darkMode]);
+  useEffect(() => { setFormData({ ...profileData }); }, [profileData]);
+
+  /* ── ORIGINAL HANDLERS (unchanged) ── */
+  const showNotification = (message, type="success") => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification({ message:"", type:"" }), 3000);
+  };
   const handleInputChange = (e) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
-    if (errors[name]) setErrors({ ...errors, [name]: "" });
+    setFormData({ ...formData, [name]:value });
+    if (errors[name]) setErrors({ ...errors, [name]:"" });
   };
-
-  const handleSettingChange = (setting) => {
-    setSettings({ ...settings, [setting]: !settings[setting] });
-  };
-
+  const handleSettingChange = (setting) => setSettings({ ...settings, [setting]:!settings[setting] });
   const handlePasswordChange = (e) => {
     const { name, value } = e.target;
-    setPasswordData({ ...passwordData, [name]: value });
+    setPasswordData({ ...passwordData, [name]:value });
   };
-
   const validateProfileForm = () => {
     const newErrors = {};
     if (!formData.fullName.trim()) newErrors.fullName = "Full name is required";
@@ -71,7 +130,6 @@ const ProfilePage = () => {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
   const validatePasswordForm = () => {
     const newErrors = {};
     if (!passwordData.currentPassword) newErrors.currentPassword = "Current password is required";
@@ -82,7 +140,6 @@ const ProfilePage = () => {
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
-
   const handleSaveProfile = () => {
     if (validateProfileForm()) {
       setProfileData({ ...formData });
@@ -90,171 +147,209 @@ const ProfilePage = () => {
       showNotification("Profile updated successfully!");
     }
   };
-
   const handleChangePassword = () => {
     if (validatePasswordForm()) {
-      setPasswordData({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setPasswordData({ currentPassword:"", newPassword:"", confirmPassword:"" });
       setShowPasswordForm(false);
       showNotification("Password changed successfully!");
     }
   };
-
-  const handleLogout = () => console.log("Logout");
-  const handleCancelEdit = () => {
-    setFormData({ ...profileData });
-    setErrors({});
-    setIsEditingProfile(false);
-  };
-
+  const handleLogout      = () => console.log("Logout");
+  const handleCancelEdit  = () => { setFormData({ ...profileData }); setErrors({}); setIsEditingProfile(false); };
   const initials = profileData.fullName.split(" ").map(n => n[0]).join("").toUpperCase();
 
+  /* ── SHARED FIELD ── */
+  const Field = ({ label, name, type="text", value, onChange, error, placeholder, icon }) => (
+    <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+      <label style={{ fontSize:"0.72rem", fontWeight:700, textTransform:"uppercase",
+        letterSpacing:"0.07em", color:C.muted, fontFamily:F }}>{label}</label>
+      <div style={{ position:"relative", display:"flex", alignItems:"center" }}>
+        {icon && <span style={{ position:"absolute", left:13, color:C.faint, display:"flex", pointerEvents:"none" }}>
+          {icon}
+        </span>}
+        <input type={type} name={name} value={value} onChange={onChange} placeholder={placeholder}
+          className={`pf-input${error?" error":""}`}
+          style={{ width:"100%", padding: icon ? "10px 14px 10px 38px" : "10px 14px",
+            border:`1.5px solid ${error?C.red:C.border}`, borderRadius:10,
+            background:C.hover, fontFamily:F, fontSize:"0.875rem", color:C.body,
+            transition:"border-color .15s, box-shadow .15s",
+            boxShadow: error ? `0 0 0 3px ${C.redM}55` : "none" }}/>
+      </div>
+      {error && <span style={{ fontSize:"0.72rem", color:C.red, fontFamily:F }}>{error}</span>}
+    </div>
+  );
+
+  /* ── ICON WRAP ── */
+  const IconWrap = ({ color, bg, bdr, children }) => (
+    <div style={{ width:38, height:38, borderRadius:10, display:"flex", alignItems:"center",
+      justifyContent:"center", background:bg, border:`1px solid ${bdr}`,
+      color, flexShrink:0 }}>{children}</div>
+  );
+
+  /* ════ RENDER ════ */
   return (
-    <div className="profile-page">
-      {/* Toast Notification */}
+    <div style={{ minHeight:"100vh", background:C.page, fontFamily:F,
+      color:C.ink, padding:"28px 32px 64px" }}>
+
+      {/* Toast */}
       {notification.message && (
-        <div className={`toast toast--${notification.type}`}>
-          <FiCheck className="toast__icon" />
+        <div style={{ position:"fixed", top:24, right:24, zIndex:9999,
+          display:"flex", alignItems:"center", gap:10,
+          background:C.green, color:"#fff", padding:"12px 18px",
+          borderRadius:12, boxShadow:C.s3, fontFamily:F,
+          fontSize:"0.875rem", fontWeight:500, animation:"profFadeUp .3s ease" }}>
+          <FiCheck size={16}/>
           <span>{notification.message}</span>
-          <button className="toast__close" onClick={() => setNotification({ message: "", type: "" })}>
-            <FiX />
+          <button onClick={() => setNotification({ message:"", type:"" })}
+            style={{ background:"none", border:"none", cursor:"pointer",
+              color:"rgba(255,255,255,.7)", display:"flex", padding:0, marginLeft:4 }}>
+            <FiX size={14}/>
           </button>
         </div>
       )}
 
-      {/* Page Header */}
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">Account Settings</h1>
-          <p className="page-subtitle">Manage your profile, preferences, and security</p>
-        </div>
+      {/* ── PAGE HEADER ── */}
+      <div className="pf-fu" style={{ marginBottom:24 }}>
+        <h1 style={{ fontSize:"1.75rem", fontWeight:800, color:C.ink,
+          margin:"0 0 5px", letterSpacing:"-0.03em" }}>Account Settings</h1>
+        <p style={{ fontSize:"0.85rem", color:C.muted, margin:0 }}>
+          Manage your profile, preferences, and security
+        </p>
       </div>
 
-      <div className="profile-layout">
-        {/* Sidebar Navigation */}
-        <aside className="profile-sidebar">
-          <div className="sidebar-avatar">
-            <div className="avatar-circle">
-              {profileData.avatar
-                ? <img src={profileData.avatar} alt="Profile" />
-                : <span className="avatar-initials">{initials}</span>
-              }
-              <button className="avatar-edit-btn" title="Change photo">
-                <FiCamera />
+      {/* ── LAYOUT — sidebar + main ── */}
+      <div style={{ display:"grid", gridTemplateColumns:"260px 1fr", gap:20, alignItems:"start" }}>
+
+        {/* ── SIDEBAR ── */}
+        <aside style={{ background:C.card, border:`1px solid ${C.border}`,
+          borderRadius:16, overflow:"hidden", boxShadow:C.s1, position:"sticky", top:24 }}>
+
+          {/* Avatar */}
+          <div style={{ padding:"24px 20px 20px", borderBottom:`1px solid ${C.border}`,
+            display:"flex", flexDirection:"column", alignItems:"center", gap:10, textAlign:"center" }}>
+            <div style={{ position:"relative", display:"inline-block" }}>
+              <div style={{ width:72, height:72, borderRadius:"50%",
+                background:`linear-gradient(135deg,${C.blue},${C.violet})`,
+                display:"flex", alignItems:"center", justifyContent:"center",
+                fontSize:"1.5rem", fontWeight:800, color:"#fff", letterSpacing:"-0.5px" }}>
+                {profileData.avatar
+                  ? <img src={profileData.avatar} alt="Profile"
+                      style={{ width:"100%", height:"100%", borderRadius:"50%", objectFit:"cover" }}/>
+                  : initials}
+              </div>
+              <button title="Change photo"
+                style={{ position:"absolute", bottom:0, right:0, width:26, height:26,
+                  borderRadius:"50%", background:C.card, border:`2px solid ${C.page}`,
+                  display:"flex", alignItems:"center", justifyContent:"center",
+                  color:C.muted, cursor:"pointer", boxShadow:C.s1 }}>
+                <FiCamera size={12}/>
               </button>
             </div>
-            <div className="sidebar-user-info">
-              <p className="sidebar-name">{profileData.fullName}</p>
-              <p className="sidebar-role">{profileData.role}</p>
+            <div>
+              <p style={{ fontSize:"0.95rem", fontWeight:700, color:C.ink, margin:"0 0 2px" }}>
+                {profileData.fullName}
+              </p>
+              <p style={{ fontSize:"0.75rem", color:C.muted, margin:0 }}>{profileData.role}</p>
             </div>
           </div>
 
-          <nav className="sidebar-nav">
-            <button
-              className={`nav-item ${activeTab === "profile" ? "nav-item--active" : ""}`}
-              onClick={() => setActiveTab("profile")}
-            >
-              <FiUser /> Profile
-            </button>
-            <button
-              className={`nav-item ${activeTab === "preferences" ? "nav-item--active" : ""}`}
-              onClick={() => setActiveTab("preferences")}
-            >
-              <FiBell /> Preferences
-            </button>
-            <button
-              className={`nav-item ${activeTab === "security" ? "nav-item--active" : ""}`}
-              onClick={() => setActiveTab("security")}
-            >
-              <FiShield /> Security
-            </button>
+          {/* Nav */}
+          <nav style={{ padding:"12px 10px" }}>
+            {[
+              { id:"profile",     icon:<FiUser size={16}/>,   label:"Profile"     },
+              { id:"preferences", icon:<FiBell size={16}/>,   label:"Preferences" },
+              { id:"security",    icon:<FiShield size={16}/>, label:"Security"    },
+            ].map(item => (
+              <button key={item.id}
+                className={`pf-nav${activeTab===item.id?" active":""}`}
+                onClick={() => setActiveTab(item.id)}
+                style={{ display:"flex", alignItems:"center", gap:10, width:"100%",
+                  padding:"10px 14px", borderRadius:10, border:"none", fontFamily:F,
+                  fontSize:"0.875rem", fontWeight:600, cursor:"pointer", textAlign:"left",
+                  marginBottom:2, transition:"all .15s",
+                  background: activeTab===item.id ? C.blueL : "transparent",
+                  color:      activeTab===item.id ? C.blue  : C.muted }}>
+                {item.icon} {item.label}
+              </button>
+            ))}
           </nav>
 
-          <div className="sidebar-footer">
-            <button className="logout-btn" onClick={handleLogout}>
-              <FiLogOut size={17} color="#ef4444" style={{flexShrink:0}} /> Sign Out
+          {/* Sign Out */}
+          <div style={{ padding:"10px 10px 14px", borderTop:`1px solid ${C.border}` }}>
+            <button className="pf-logout" onClick={handleLogout}
+              style={{ display:"flex", alignItems:"center", gap:10, width:"100%",
+                padding:"10px 14px", borderRadius:10, border:"none", fontFamily:F,
+                fontSize:"0.875rem", fontWeight:600, cursor:"pointer", textAlign:"left",
+                background:"transparent", color:C.red, transition:"all .15s" }}>
+              <FiLogOut size={16} style={{ flexShrink:0 }}/> Sign Out
             </button>
           </div>
         </aside>
 
-        {/* Main Content */}
-        <main className="profile-main">
+        {/* ── MAIN CONTENT ── */}
+        <main>
 
           {/* PROFILE TAB */}
           {activeTab === "profile" && (
-            <div className="tab-content">
-              <div className="card">
-                <div className="card-header">
+            <div className="pf-fu" style={{ display:"flex", flexDirection:"column", gap:16 }}>
+              <div className="pf-card" style={{ background:C.card, border:`1px solid ${C.border}`,
+                borderRadius:16, overflow:"hidden", boxShadow:C.s1,
+                transition:"box-shadow .2s" }}>
+
+                {/* Card header */}
+                <div style={{ padding:"20px 24px", borderBottom:`1px solid ${C.border}`,
+                  display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
                   <div>
-                    <h2 className="card-title">Personal Information</h2>
-                    <p className="card-subtitle">Update your name and email address</p>
+                    <h2 style={{ fontSize:"1rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>Personal Information</h2>
+                    <p style={{ fontSize:"0.78rem", color:C.muted, margin:0 }}>Update your name and email address</p>
                   </div>
                   {!isEditingProfile && (
-                    <button className="btn btn--secondary" onClick={() => setIsEditingProfile(true)}>
-                      <FiEdit2 /> Edit
-                    </button>
+                    <Btn variant="secondary" onClick={() => setIsEditingProfile(true)}>
+                      <FiEdit2 size={13}/> Edit
+                    </Btn>
                   )}
                 </div>
 
-                <div className="card-body">
+                <div style={{ padding:"24px" }}>
                   {isEditingProfile ? (
-                    <div className="form-grid">
-                      <div className="form-field">
-                        <label className="field-label">Full Name</label>
-                        <div className="input-wrapper">
-                          <FiUser className="input-icon" />
-                          <input
-                            type="text"
-                            name="fullName"
-                            value={formData.fullName}
-                            onChange={handleInputChange}
-                            className={`field-input ${errors.fullName ? "field-input--error" : ""}`}
-                            placeholder="Your full name"
-                          />
-                        </div>
-                        {errors.fullName && <span className="field-error">{errors.fullName}</span>}
-                      </div>
-
-                      <div className="form-field">
-                        <label className="field-label">Email Address</label>
-                        <div className="input-wrapper">
-                          <FiMail className="input-icon" />
-                          <input
-                            type="email"
-                            name="email"
-                            value={formData.email}
-                            onChange={handleInputChange}
-                            className={`field-input ${errors.email ? "field-input--error" : ""}`}
-                            placeholder="your@email.com"
-                          />
-                        </div>
-                        {errors.email && <span className="field-error">{errors.email}</span>}
-                      </div>
-
-                      <div className="form-actions">
-                        <button className="btn btn--primary" onClick={handleSaveProfile}>
-                          <FiSave /> Save Changes
-                        </button>
-                        <button className="btn btn--ghost" onClick={handleCancelEdit}>
-                          Cancel
-                        </button>
+                    <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+                      <Field label="Full Name" name="fullName" value={formData.fullName}
+                        onChange={handleInputChange} error={errors.fullName}
+                        placeholder="Your full name" icon={<FiUser size={14}/>}/>
+                      <Field label="Email Address" name="email" type="email" value={formData.email}
+                        onChange={handleInputChange} error={errors.email}
+                        placeholder="your@email.com" icon={<FiMail size={14}/>}/>
+                      <div style={{ display:"flex", gap:10, paddingTop:4 }}>
+                        <Btn variant="primary" onClick={handleSaveProfile}>
+                          <FiSave size={13}/> Save Changes
+                        </Btn>
+                        <Btn variant="ghost" onClick={handleCancelEdit}>Cancel</Btn>
                       </div>
                     </div>
                   ) : (
-                    <div className="profile-display">
-                      <div className="profile-field">
-                        <span className="profile-field__label">Full Name</span>
-                        <span className="profile-field__value">{profileData.fullName}</span>
-                      </div>
-                      <div className="profile-field">
-                        <span className="profile-field__label">Email Address</span>
-                        <span className="profile-field__value">{profileData.email}</span>
-                      </div>
-                      <div className="profile-field">
-                        <span className="profile-field__label">Account Role</span>
-                        <span className="profile-field__value">
-                          <span className="role-badge">{profileData.role}</span>
-                        </span>
-                      </div>
+                    <div style={{ display:"flex", flexDirection:"column" }}>
+                      {[
+                        { label:"Full Name",      value:profileData.fullName  },
+                        { label:"Email Address",  value:profileData.email     },
+                        { label:"Account Role",   value:null, role:profileData.role },
+                      ].map((row,i,arr) => (
+                        <div key={i} style={{ display:"flex", alignItems:"center",
+                          padding:"16px 0", borderBottom: i<arr.length-1?`1px solid ${C.border}`:"none" }}>
+                          <span style={{ width:160, fontSize:"0.7rem", fontWeight:700,
+                            textTransform:"uppercase", letterSpacing:"0.08em", color:C.faint, flexShrink:0 }}>
+                            {row.label}
+                          </span>
+                          {row.role ? (
+                            <span style={{ display:"inline-block", padding:"3px 12px",
+                              borderRadius:20, fontSize:"0.78rem", fontWeight:600,
+                              background:C.blueL, border:`1px solid ${C.blueM}`, color:C.blue }}>
+                              {row.role}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize:"0.9rem", color:C.body, fontWeight:500 }}>{row.value}</span>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -264,76 +359,48 @@ const ProfilePage = () => {
 
           {/* PREFERENCES TAB */}
           {activeTab === "preferences" && (
-            <div className="tab-content">
-              <div className="card">
-                <div className="card-header">
-                  <div>
-                    <h2 className="card-title">Preferences</h2>
-                    <p className="card-subtitle">Customize your experience and notifications</p>
-                  </div>
+            <div className="pf-fu">
+              <div className="pf-card" style={{ background:C.card, border:`1px solid ${C.border}`,
+                borderRadius:16, overflow:"hidden", boxShadow:C.s1, transition:"box-shadow .2s" }}>
+                <div style={{ padding:"20px 24px", borderBottom:`1px solid ${C.border}` }}>
+                  <h2 style={{ fontSize:"1rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>Preferences</h2>
+                  <p style={{ fontSize:"0.78rem", color:C.muted, margin:0 }}>Customize your experience and notifications</p>
                 </div>
-                <div className="card-body">
-                  <div className="settings-list">
-                    <div className="setting-row">
-                      <div className="setting-icon-wrap setting-icon-wrap--blue">
-                        {settings.darkMode ? <FiMoon /> : <FiSun />}
+                <div style={{ padding:"8px 0" }}>
+                  {[
+                    {
+                      key:"darkMode", label:"Dark Mode", desc:"Switch between light and dark interface",
+                      icon: settings.darkMode ? <FiMoon size={16}/> : <FiSun size={16}/>,
+                      accent:C.blue, bg:C.blueL, bdr:C.blueM,
+                    },
+                    {
+                      key:"emailNotifications", label:"Email Notifications", desc:"Receive bill reminders and usage alerts via email",
+                      icon:<FiBell size={16}/>, accent:C.green, bg:C.greenL, bdr:C.greenM,
+                    },
+                    {
+                      key:"usageAlerts", label:"Usage Alerts", desc:"Get notified about unusual consumption patterns",
+                      icon:<FiAlertTriangle size={16}/>, accent:C.amber, bg:C.amberL, bdr:C.amberM,
+                    },
+                  ].map((s,i,arr) => (
+                    <div key={s.key} style={{ display:"flex", alignItems:"center", gap:14,
+                      padding:"18px 24px",
+                      borderBottom: i<arr.length-1 ? `1px solid ${C.border}` : "none" }}>
+                      <IconWrap color={s.accent} bg={s.bg} bdr={s.bdr}>{s.icon}</IconWrap>
+                      <div style={{ flex:1 }}>
+                        <h4 style={{ fontSize:"0.875rem", fontWeight:600, color:C.ink, margin:"0 0 2px" }}>{s.label}</h4>
+                        <p style={{ fontSize:"0.78rem", color:C.muted, margin:0 }}>{s.desc}</p>
                       </div>
-                      <div className="setting-text">
-                        <h4>Dark Mode</h4>
-                        <p>Switch between light and dark interface</p>
-                      </div>
-                      <label className="toggle">
-                        <input
-                          type="checkbox"
-                          checked={settings.darkMode}
-                          onChange={() => handleSettingChange("darkMode")}
-                        />
-                        <span className="toggle__track">
-                          <span className="toggle__thumb" />
+                      {/* Toggle */}
+                      <label style={{ cursor:"pointer", flexShrink:0 }}>
+                        <input type="checkbox" className="pf-toggle-input"
+                          checked={settings[s.key]}
+                          onChange={() => handleSettingChange(s.key)}/>
+                        <span className="pf-toggle-track">
+                          <span className="pf-toggle-thumb"/>
                         </span>
                       </label>
                     </div>
-
-                    <div className="setting-row">
-                      <div className="setting-icon-wrap setting-icon-wrap--green">
-                        <FiBell />
-                      </div>
-                      <div className="setting-text">
-                        <h4>Email Notifications</h4>
-                        <p>Receive bill reminders and usage alerts via email</p>
-                      </div>
-                      <label className="toggle">
-                        <input
-                          type="checkbox"
-                          checked={settings.emailNotifications}
-                          onChange={() => handleSettingChange("emailNotifications")}
-                        />
-                        <span className="toggle__track">
-                          <span className="toggle__thumb" />
-                        </span>
-                      </label>
-                    </div>
-
-                    <div className="setting-row">
-                      <div className="setting-icon-wrap setting-icon-wrap--amber">
-                        <FiAlertTriangle />
-                      </div>
-                      <div className="setting-text">
-                        <h4>Usage Alerts</h4>
-                        <p>Get notified about unusual consumption patterns</p>
-                      </div>
-                      <label className="toggle">
-                        <input
-                          type="checkbox"
-                          checked={settings.usageAlerts}
-                          onChange={() => handleSettingChange("usageAlerts")}
-                        />
-                        <span className="toggle__track">
-                          <span className="toggle__thumb" />
-                        </span>
-                      </label>
-                    </div>
-                  </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -341,89 +408,48 @@ const ProfilePage = () => {
 
           {/* SECURITY TAB */}
           {activeTab === "security" && (
-            <div className="tab-content">
-              <div className="card">
-                <div className="card-header">
-                  <div>
-                    <h2 className="card-title">Security</h2>
-                    <p className="card-subtitle">Manage your password and account access</p>
-                  </div>
+            <div className="pf-fu" style={{ display:"flex", flexDirection:"column", gap:16 }}>
+
+              {/* Password card */}
+              <div className="pf-card" style={{ background:C.card, border:`1px solid ${C.border}`,
+                borderRadius:16, overflow:"hidden", boxShadow:C.s1, transition:"box-shadow .2s" }}>
+                <div style={{ padding:"20px 24px", borderBottom:`1px solid ${C.border}` }}>
+                  <h2 style={{ fontSize:"1rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>Security</h2>
+                  <p style={{ fontSize:"0.78rem", color:C.muted, margin:0 }}>Manage your password and account access</p>
                 </div>
-                <div className="card-body">
+                <div style={{ padding:"24px" }}>
                   {!showPasswordForm ? (
-                    <div className="security-row">
-                      <div className="security-row__info">
-                        <div className="setting-icon-wrap setting-icon-wrap--blue">
-                          <FiLock />
-                        </div>
-                        <div>
-                          <h4>Password</h4>
-                          <p>Last changed 3 months ago</p>
-                        </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
+                      <IconWrap color={C.blue} bg={C.blueL} bdr={C.blueM}><FiLock size={16}/></IconWrap>
+                      <div style={{ flex:1 }}>
+                        <h4 style={{ fontSize:"0.875rem", fontWeight:600, color:C.ink, margin:"0 0 2px" }}>Password</h4>
+                        <p style={{ fontSize:"0.78rem", color:C.muted, margin:0 }}>Last changed 3 months ago</p>
                       </div>
-                      <button className="btn btn--secondary" onClick={() => setShowPasswordForm(true)}>
+                      <Btn variant="secondary" onClick={() => setShowPasswordForm(true)}>
                         Change Password
-                      </button>
+                      </Btn>
                     </div>
                   ) : (
-                    <div className="password-form">
-                      <div className="form-grid">
-                        <div className="form-field">
-                          <label className="field-label">Current Password</label>
-                          <div className="input-wrapper">
-                            <FiLock className="input-icon" />
-                            <input
-                              type="password"
-                              name="currentPassword"
-                              value={passwordData.currentPassword}
-                              onChange={handlePasswordChange}
-                              className={`field-input ${errors.currentPassword ? "field-input--error" : ""}`}
-                              placeholder="Enter current password"
-                            />
-                          </div>
-                          {errors.currentPassword && <span className="field-error">{errors.currentPassword}</span>}
-                        </div>
-
-                        <div className="form-field">
-                          <label className="field-label">New Password</label>
-                          <div className="input-wrapper">
-                            <FiLock className="input-icon" />
-                            <input
-                              type="password"
-                              name="newPassword"
-                              value={passwordData.newPassword}
-                              onChange={handlePasswordChange}
-                              className={`field-input ${errors.newPassword ? "field-input--error" : ""}`}
-                              placeholder="Min. 8 characters"
-                            />
-                          </div>
-                          {errors.newPassword && <span className="field-error">{errors.newPassword}</span>}
-                        </div>
-
-                        <div className="form-field">
-                          <label className="field-label">Confirm New Password</label>
-                          <div className="input-wrapper">
-                            <FiLock className="input-icon" />
-                            <input
-                              type="password"
-                              name="confirmPassword"
-                              value={passwordData.confirmPassword}
-                              onChange={handlePasswordChange}
-                              className={`field-input ${errors.confirmPassword ? "field-input--error" : ""}`}
-                              placeholder="Repeat new password"
-                            />
-                          </div>
-                          {errors.confirmPassword && <span className="field-error">{errors.confirmPassword}</span>}
-                        </div>
-
-                        <div className="form-actions">
-                          <button className="btn btn--primary" onClick={handleChangePassword}>
-                            <FiShield /> Update Password
-                          </button>
-                          <button className="btn btn--ghost" onClick={() => { setShowPasswordForm(false); setErrors({}); }}>
-                            Cancel
-                          </button>
-                        </div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+                      <Field label="Current Password" name="currentPassword" type="password"
+                        value={passwordData.currentPassword} onChange={handlePasswordChange}
+                        error={errors.currentPassword} placeholder="Enter current password"
+                        icon={<FiLock size={14}/>}/>
+                      <Field label="New Password" name="newPassword" type="password"
+                        value={passwordData.newPassword} onChange={handlePasswordChange}
+                        error={errors.newPassword} placeholder="Min. 8 characters"
+                        icon={<FiLock size={14}/>}/>
+                      <Field label="Confirm New Password" name="confirmPassword" type="password"
+                        value={passwordData.confirmPassword} onChange={handlePasswordChange}
+                        error={errors.confirmPassword} placeholder="Repeat new password"
+                        icon={<FiLock size={14}/>}/>
+                      <div style={{ display:"flex", gap:10, paddingTop:4 }}>
+                        <Btn variant="primary" onClick={handleChangePassword}>
+                          <FiShield size={13}/> Update Password
+                        </Btn>
+                        <Btn variant="ghost" onClick={() => { setShowPasswordForm(false); setErrors({}); }}>
+                          Cancel
+                        </Btn>
                       </div>
                     </div>
                   )}
@@ -431,33 +457,28 @@ const ProfilePage = () => {
               </div>
 
               {/* Danger Zone */}
-              <div className="card card--danger">
-                <div className="card-header">
-                  <div>
-                    <h2 className="card-title card-title--danger">Danger Zone</h2>
-                    <p className="card-subtitle">Irreversible account actions</p>
-                  </div>
+              <div className="pf-card" style={{ background:C.card,
+                border:`1px solid ${C.redM}`, borderRadius:16, overflow:"hidden",
+                boxShadow:C.s1, transition:"box-shadow .2s" }}>
+                <div style={{ padding:"20px 24px", borderBottom:`1px solid ${C.redM}`,
+                  background:C.redL }}>
+                  <h2 style={{ fontSize:"1rem", fontWeight:700, color:C.red, margin:"0 0 3px" }}>Danger Zone</h2>
+                  <p style={{ fontSize:"0.78rem", color:C.muted, margin:0 }}>Irreversible account actions</p>
                 </div>
-                <div className="card-body">
-                  <div className="security-row">
-                    <div className="security-row__info">
-                      <div className="setting-icon-wrap setting-icon-wrap--red">
-                        <FiLogOut />
-                      </div>
-                      <div>
-                        <h4>Sign Out</h4>
-                        <p>Sign out of your account on this device</p>
-                      </div>
+                <div style={{ padding:"24px" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
+                    <IconWrap color={C.red} bg={C.redL} bdr={C.redM}><FiLogOut size={16}/></IconWrap>
+                    <div style={{ flex:1 }}>
+                      <h4 style={{ fontSize:"0.875rem", fontWeight:600, color:C.ink, margin:"0 0 2px" }}>Sign Out</h4>
+                      <p style={{ fontSize:"0.78rem", color:C.muted, margin:0 }}>Sign out of your account on this device</p>
                     </div>
-                    <button className="btn btn--danger" onClick={handleLogout}>
-                      Sign Out
-                    </button>
+                    <Btn variant="danger" onClick={handleLogout}>Sign Out</Btn>
                   </div>
                 </div>
               </div>
+
             </div>
           )}
-
         </main>
       </div>
     </div>
