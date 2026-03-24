@@ -1,7 +1,8 @@
-// src/pages/Dashboard.jsx  –  Rebuilt v3
-import { useState, useMemo } from "react";
+// src/pages/Dashboard.jsx
+import { useState } from "react";
+import { useAuth } from "../context/AuthContext";
 import {
-  AreaChart, Area, BarChart, Bar, LineChart, Line,
+  AreaChart, Area, BarChart, Bar,
   PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ReferenceLine, ResponsiveContainer,
@@ -12,7 +13,6 @@ import {
   FiActivity, FiBarChart2, FiChevronRight, FiInfo,
 } from "react-icons/fi";
 
-/* ─── Font + Animations ─── */
 (() => {
   if (!document.getElementById("db-font")) {
     const l = document.createElement("link");
@@ -26,7 +26,6 @@ import {
     s.textContent = `
       @keyframes fadeUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
       @keyframes pulse  { 0%,100%{opacity:1} 50%{opacity:.4} }
-      @keyframes shimmer{ 0%{background-position:-400px 0} 100%{background-position:400px 0} }
       .fu  { animation: fadeUp .45s ease both }
       .fu1 { animation-delay:.06s }  .fu2 { animation-delay:.12s }
       .fu3 { animation-delay:.18s }  .fu4 { animation-delay:.24s }
@@ -38,7 +37,6 @@ import {
   }
 })();
 
-/* ════ TOKENS ════ */
 const C = {
   page:"#f3f4f8", card:"#fff", hover:"#f0f2f7",
   ink:"#0f172a", body:"#334155", muted:"#64748b", faint:"#94a3b8",
@@ -55,7 +53,6 @@ const C = {
 };
 const F = "'Plus Jakarta Sans',-apple-system,sans-serif";
 
-/* ════ DATA ════ */
 const TREND = [
   { m:"Jun", water:24, elec:138, waterBill:2020, elecBill:4970, total:7200 },
   { m:"Jul", water:26, elec:145, waterBill:2190, elecBill:4760, total:7800 },
@@ -65,25 +62,20 @@ const TREND = [
   { m:"Nov", water:28, elec:152, waterBill:2360, elecBill:4990, total:8200 },
   { m:"Dec*",water:28, elec:145, waterBill:2360, elecBill:5240, total:8450, predicted:true },
 ];
-
 const CURRENT = { water:25, elec:140, waterBill:2110, elecBill:5040, fixedFees:350, total:7500, budget:8000 };
 CURRENT.budgetPct = Math.round((CURRENT.total/CURRENT.budget)*100);
-
 const PRED = { water:28, elec:145, waterBill:2360, elecBill:5240, fixedFees:850, costChange:3,
   waterUnitsChange:10, elecUnitsChange:-5, waterBillChange:12, elecBillChange:4 };
 PRED.total = PRED.waterBill + PRED.elecBill + PRED.fixedFees;
-
 const PIE = [
   { name:"Electricity", value:62, color:C.blue },
   { name:"Water",       value:28, color:C.teal },
   { name:"Fixed Fees",  value:10, color:C.violet },
 ];
-
 const COST_CMP = TREND.slice(2).map(d => ({ m:d.m, cost:d.total }));
 
-/* ════ MICRO COMPONENTS ════ */
-const Badge = ({ val, inverse=false }) => {
-  const up = inverse ? val<=0 : val>=0;
+const Badge = ({ val }) => {
+  const up = val >= 0;
   return (
     <span style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"2px 7px", borderRadius:20,
       fontSize:"0.68rem", fontWeight:700,
@@ -128,8 +120,7 @@ const Tip = ({ active, payload, label, prefix="" }) => {
       <p style={{ fontSize:"0.7rem", fontWeight:700, color:C.muted, margin:"0 0 8px",
         textTransform:"uppercase", letterSpacing:"0.08em" }}>{label}</p>
       {payload.map((p,i) => (
-        <div key={i} style={{ display:"flex", alignItems:"center", gap:8,
-          marginBottom:i<payload.length-1?5:0 }}>
+        <div key={i} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:i<payload.length-1?5:0 }}>
           <span style={{ width:8, height:8, borderRadius:2, background:p.color, display:"inline-block" }}/>
           <span style={{ fontSize:"0.75rem", color:C.muted, flex:1 }}>{p.name}</span>
           <span style={{ fontSize:"0.8125rem", fontWeight:700, color:C.ink }}>{prefix}{p.value.toLocaleString()}</span>
@@ -141,27 +132,25 @@ const Tip = ({ active, payload, label, prefix="" }) => {
 
 const ax = { fill:C.faint, fontSize:11, fontFamily:F };
 
-/* ════ MAIN ════ */
-export default function Dashboard({ user }) {
+export default function Dashboard() {
+  // ── Pull real user from AuthContext ──
+  const { user: authUser } = useAuth();
   const [activeTab, setActiveTab] = useState("Monthly");
+
   const now = new Date();
-  const monthName = now.toLocaleString("default",{month:"long"});
-  const displayName = user?.name ?? "Ashan";
+  const monthName = now.toLocaleString("default", { month:"long" });
+  const displayName = authUser?.name || "";
 
   const overBudget = CURRENT.budgetPct >= 100;
   const nearBudget = CURRENT.budgetPct >= 85 && !overBudget;
 
   return (
     <div style={{ minHeight:"100vh", background:C.page, fontFamily:F, color:C.ink, padding:"0 0 64px" }}>
-
       <div style={{ padding:"28px 32px 0" }}>
 
-        {/* ══════════════════════════════════════
-            HERO SECTION
-        ══════════════════════════════════════ */}
+        {/* HERO */}
         <div className="fu fu1" style={{ background:`linear-gradient(130deg,#1e3a8a 0%,#2563eb 55%,#0891b2 100%)`,
           borderRadius:20, padding:"28px 32px", marginBottom:28, position:"relative", overflow:"hidden" }}>
-          {/* Decorative circles */}
           <div style={{ position:"absolute", top:-40, right:-40, width:200, height:200,
             borderRadius:"50%", background:"rgba(255,255,255,.06)" }}/>
           <div style={{ position:"absolute", bottom:-30, right:120, width:120, height:120,
@@ -177,11 +166,12 @@ export default function Dashboard({ user }) {
                   letterSpacing:"0.1em", textTransform:"uppercase" }}>Live · {monthName} 2024</span>
               </div>
               <h1 style={{ fontSize:"1.125rem", fontWeight:700, color:"rgba(255,255,255,.8)",
-                margin:"0 0 4px", letterSpacing:"-0.01em" }}>Good morning, {displayName} 👋</h1>
+                margin:"0 0 4px", letterSpacing:"-0.01em" }}>
+                Good morning{displayName ? `, ${displayName}` : ""} 👋
+              </h1>
               <p style={{ fontSize:"0.8rem", color:"rgba(255,255,255,.6)", margin:"0 0 18px" }}>
                 Here's your utility overview for this month
               </p>
-              {/* Big bill number */}
               <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:8 }}>
                 <span style={{ fontSize:"3rem", fontWeight:800, color:"#fff",
                   letterSpacing:"-0.05em", lineHeight:1 }}>
@@ -194,14 +184,12 @@ export default function Dashboard({ user }) {
               </p>
             </div>
 
-            {/* Budget ring summary */}
             <div style={{ background:"rgba(255,255,255,.12)", backdropFilter:"blur(12px)",
               border:"1px solid rgba(255,255,255,.18)", borderRadius:16, padding:"18px 22px",
               minWidth:200, flexShrink:0 }}>
               <p style={{ fontSize:"0.68rem", fontWeight:700, color:"rgba(255,255,255,.65)",
                 textTransform:"uppercase", letterSpacing:"0.1em", margin:"0 0 10px" }}>Budget Used</p>
               <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-                {/* Mini donut */}
                 <div style={{ position:"relative", width:56, height:56, flexShrink:0 }}>
                   <svg viewBox="0 0 56 56" style={{ transform:"rotate(-90deg)", width:56, height:56 }}>
                     <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(255,255,255,.15)" strokeWidth="6"/>
@@ -232,37 +220,21 @@ export default function Dashboard({ user }) {
           </div>
         </div>
 
-
-
-        {/* ══════════════════════════════════════
-            SUMMARY STAT CARDS
-        ══════════════════════════════════════ */}
+        {/* STAT CARDS */}
         <Label mb={12}>This Month at a Glance</Label>
-
-        {/* Current month sub-label */}
         <p style={{ fontSize:"0.68rem", fontWeight:700, color:C.muted, margin:"0 0 8px",
           display:"flex", alignItems:"center", gap:8 }}>
           <span style={{ width:8, height:8, borderRadius:2, background:C.ink, display:"inline-block" }}/>
           Current Month
         </p>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",
-          gap:14, marginBottom:16 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14, marginBottom:16 }}>
           {[
-            {
-              icon:<FiDroplet size={17}/>, title:"Water Bill", accent:C.teal, bg:C.tealL, bdr:C.tealM, cls:"fu1",
-              primary:`Rs. ${CURRENT.waterBill.toLocaleString()}`,
-              secondary:`${CURRENT.water} Units used`, chg:-4,
-            },
-            {
-              icon:<FiZap size={17}/>, title:"Electricity Bill", accent:C.blue, bg:C.blueL, bdr:C.blueM, cls:"fu2",
-              primary:`Rs. ${CURRENT.elecBill.toLocaleString()}`,
-              secondary:`${CURRENT.elec} kWh used`, chg:-5,
-            },
-            {
-              icon:<FiDollarSign size={17}/>, title:"Total Bill", accent:C.violet, bg:C.violetL, bdr:C.violetM, cls:"fu3",
-              primary:`Rs. ${CURRENT.total.toLocaleString()}`,
-              secondary:"This month's total", chg:3,
-            },
+            { icon:<FiDroplet size={17}/>, title:"Water Bill", accent:C.teal, bg:C.tealL, bdr:C.tealM, cls:"fu1",
+              primary:`Rs. ${CURRENT.waterBill.toLocaleString()}`, secondary:`${CURRENT.water} Units used`, chg:-4 },
+            { icon:<FiZap size={17}/>, title:"Electricity Bill", accent:C.blue, bg:C.blueL, bdr:C.blueM, cls:"fu2",
+              primary:`Rs. ${CURRENT.elecBill.toLocaleString()}`, secondary:`${CURRENT.elec} kWh used`, chg:-5 },
+            { icon:<FiDollarSign size={17}/>, title:"Total Bill", accent:C.violet, bg:C.violetL, bdr:C.violetM, cls:"fu3",
+              primary:`Rs. ${CURRENT.total.toLocaleString()}`, secondary:"This month's total", chg:3 },
           ].map((s,i) => (
             <div key={i} className={`fu db-hover ${s.cls}`} style={{ background:C.card,
               border:`1px solid ${C.border}`, borderRadius:14, overflow:"hidden",
@@ -285,35 +257,23 @@ export default function Dashboard({ user }) {
           ))}
         </div>
 
-        {/* Predicted next month sub-label */}
         <p style={{ fontSize:"0.68rem", fontWeight:700, color:C.amber, margin:"0 0 8px",
           display:"flex", alignItems:"center", gap:8 }}>
           <span style={{ width:8, height:8, borderRadius:2, background:C.amber, display:"inline-block" }}/>
           Predicted Next Month
         </p>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",
-          gap:14, marginBottom:32 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14, marginBottom:32 }}>
           {[
-            {
-              icon:<FiDroplet size={17}/>, title:"Water Bill", accent:C.teal, bg:C.tealL, bdr:C.tealM, cls:"fu4",
-              primary:`Rs. ${PRED.waterBill.toLocaleString()}`,
-              secondary:`${PRED.water} Units est.`, chg:PRED.waterBillChange,
-            },
-            {
-              icon:<FiZap size={17}/>, title:"Electricity Bill", accent:C.blue, bg:C.blueL, bdr:C.blueM, cls:"fu5",
-              primary:`Rs. ${PRED.elecBill.toLocaleString()}`,
-              secondary:`${PRED.elec} kWh est.`, chg:PRED.elecBillChange,
-            },
-            {
-              icon:<FiBarChart2 size={17}/>, title:"Total Predicted", accent:C.amber, bg:C.amberL, bdr:C.amberM, cls:"fu5",
-              primary:`Rs. ${PRED.total.toLocaleString()}`,
-              secondary:"Overall next month", chg:PRED.costChange,
-            },
+            { icon:<FiDroplet size={17}/>, title:"Water Bill", accent:C.teal, bg:C.tealL, bdr:C.tealM, cls:"fu4",
+              primary:`Rs. ${PRED.waterBill.toLocaleString()}`, secondary:`${PRED.water} Units est.`, chg:PRED.waterBillChange },
+            { icon:<FiZap size={17}/>, title:"Electricity Bill", accent:C.blue, bg:C.blueL, bdr:C.blueM, cls:"fu5",
+              primary:`Rs. ${PRED.elecBill.toLocaleString()}`, secondary:`${PRED.elec} kWh est.`, chg:PRED.elecBillChange },
+            { icon:<FiBarChart2 size={17}/>, title:"Total Predicted", accent:C.amber, bg:C.amberL, bdr:C.amberM, cls:"fu5",
+              primary:`Rs. ${PRED.total.toLocaleString()}`, secondary:"Overall next month", chg:PRED.costChange },
           ].map((s,i) => (
             <div key={i} className={`fu db-hover ${s.cls}`} style={{ background:C.card,
               border:`1px solid ${s.bdr}`, borderRadius:14, overflow:"hidden",
               boxShadow:C.s1, transition:"transform .22s ease, box-shadow .22s ease" }}>
-              {/* Dashed top bar = predicted */}
               <div style={{ height:3,
                 background:`repeating-linear-gradient(90deg,${s.accent} 0px,${s.accent} 8px,transparent 8px,transparent 14px)` }}/>
               <div style={{ padding:"15px 17px 17px" }}>
@@ -338,19 +298,14 @@ export default function Dashboard({ user }) {
           ))}
         </div>
 
-        {/* ══════════════════════════════════════
-            PREDICTION SECTION
-        ══════════════════════════════════════ */}
+        {/* PREDICTION TABLE */}
         <Label mb={12}>Next Month Prediction</Label>
         <div className="fu fu3" style={{ marginBottom:32 }}>
           <Card style={{ padding:0 }}>
-            {/* Header */}
             <div style={{ padding:"18px 24px 16px", borderBottom:`1px solid ${C.border}`,
               display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
               <div>
-                <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 2px" }}>
-                  Forecast Breakdown
-                </h3>
+                <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 2px" }}>Forecast Breakdown</h3>
                 <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>
                   Predicted usage & billing for next month — based on 6-month trend analysis
                 </p>
@@ -361,8 +316,6 @@ export default function Dashboard({ user }) {
                 <span style={{ fontSize:"0.7rem", fontWeight:600, color:C.blue }}>Confidence: High</span>
               </div>
             </div>
-
-            {/* Comparison table */}
             <div style={{ overflowX:"auto" }}>
               <table style={{ width:"100%", borderCollapse:"collapse", fontFamily:F }}>
                 <thead>
@@ -370,63 +323,44 @@ export default function Dashboard({ user }) {
                     {["Utility","Current Month","","Predicted Next Month","Change"].map((h,i) => (
                       <th key={i} style={{ padding:"10px 20px", fontSize:"0.67rem", fontWeight:800,
                         color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em",
-                        textAlign: i===0?"left":"right", borderBottom:`1px solid ${C.border}`,
+                        textAlign:i===0?"left":"right", borderBottom:`1px solid ${C.border}`,
                         whiteSpace:"nowrap" }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {/* Water row */}
                   {[
-                    {
-                      icon:<FiDroplet size={15}/>, label:"Water",
-                      accent:C.teal, bg:C.tealL, bdr:C.tealM,
+                    { icon:<FiDroplet size={15}/>, label:"Water", accent:C.teal, bg:C.tealL, bdr:C.tealM,
                       curUnits:`${CURRENT.water} Units`, curBill:`Rs. ${CURRENT.waterBill.toLocaleString()}`,
                       predUnits:`${PRED.water} Units`, predBill:`Rs. ${PRED.waterBill.toLocaleString()}`,
-                      unitsChg:PRED.waterUnitsChange, billChg:PRED.waterBillChange,
-                    },
-                    {
-                      icon:<FiZap size={15}/>, label:"Electricity",
-                      accent:C.blue, bg:C.blueL, bdr:C.blueM,
+                      unitsChg:PRED.waterUnitsChange, billChg:PRED.waterBillChange },
+                    { icon:<FiZap size={15}/>, label:"Electricity", accent:C.blue, bg:C.blueL, bdr:C.blueM,
                       curUnits:`${CURRENT.elec} kWh`, curBill:`Rs. ${CURRENT.elecBill.toLocaleString()}`,
                       predUnits:`${PRED.elec} kWh`, predBill:`Rs. ${PRED.elecBill.toLocaleString()}`,
-                      unitsChg:PRED.elecUnitsChange, billChg:PRED.elecBillChange,
-                    },
-                    {
-                      icon:<FiActivity size={15}/>, label:"Fixed Fees",
-                      accent:C.violet, bg:C.violetL, bdr:C.violetM,
+                      unitsChg:PRED.elecUnitsChange, billChg:PRED.elecBillChange },
+                    { icon:<FiActivity size={15}/>, label:"Fixed Fees", accent:C.violet, bg:C.violetL, bdr:C.violetM,
                       curUnits:"—", curBill:`Rs. ${CURRENT.fixedFees.toLocaleString()}`,
                       predUnits:"—", predBill:`Rs. ${PRED.fixedFees.toLocaleString()}`,
-                      unitsChg:null, billChg:((PRED.fixedFees-CURRENT.fixedFees)/CURRENT.fixedFees*100).toFixed(0)*1,
-                    },
+                      unitsChg:null, billChg:((PRED.fixedFees-CURRENT.fixedFees)/CURRENT.fixedFees*100).toFixed(0)*1 },
                   ].map((row,i) => (
                     <tr key={i} style={{ borderBottom:`1px solid ${C.border}` }}>
-                      {/* Utility name */}
                       <td style={{ padding:"14px 20px" }}>
                         <div style={{ display:"flex", alignItems:"center", gap:9 }}>
                           <div style={{ width:32, height:32, borderRadius:8, background:row.bg,
                             border:`1px solid ${row.bdr}`, display:"flex", alignItems:"center",
-                            justifyContent:"center", color:row.accent, flexShrink:0 }}>
-                            {row.icon}
-                          </div>
+                            justifyContent:"center", color:row.accent, flexShrink:0 }}>{row.icon}</div>
                           <span style={{ fontSize:"0.85rem", fontWeight:700, color:C.ink }}>{row.label}</span>
                         </div>
                       </td>
-                      {/* Current */}
                       <td style={{ padding:"14px 20px", textAlign:"right" }}>
                         <p style={{ fontSize:"0.85rem", fontWeight:700, color:C.ink, margin:"0 0 2px" }}>{row.curBill}</p>
                         <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{row.curUnits}</p>
                       </td>
-                      {/* Arrow */}
-                      <td style={{ padding:"14px 10px", textAlign:"center" }}>
-                        <FiChevronRight size={14} color={C.faint}/>
-                      </td>
-                      {/* Predicted */}
+                      <td style={{ padding:"14px 10px", textAlign:"center" }}><FiChevronRight size={14} color={C.faint}/></td>
                       <td style={{ padding:"14px 20px", textAlign:"right" }}>
                         <p style={{ fontSize:"0.85rem", fontWeight:700, color:C.blue, margin:"0 0 2px" }}>{row.predBill}</p>
                         <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{row.predUnits}</p>
                       </td>
-                      {/* Change badge */}
                       <td style={{ padding:"14px 20px", textAlign:"right" }}>
                         <Badge val={row.billChg}/>
                         {row.unitsChg !== null && (
@@ -437,7 +371,6 @@ export default function Dashboard({ user }) {
                       </td>
                     </tr>
                   ))}
-                  {/* TOTAL row */}
                   <tr style={{ background:"linear-gradient(90deg,#f0f7ff,#fafbff)" }}>
                     <td style={{ padding:"16px 20px" }}>
                       <span style={{ fontSize:"0.875rem", fontWeight:800, color:C.ink }}>Total Estimated Bill</span>
@@ -445,27 +378,20 @@ export default function Dashboard({ user }) {
                     <td style={{ padding:"16px 20px", textAlign:"right" }}>
                       <span style={{ fontSize:"0.925rem", fontWeight:700, color:C.ink }}>Rs. {CURRENT.total.toLocaleString()}</span>
                     </td>
-                    <td style={{ padding:"16px 10px", textAlign:"center" }}>
-                      <FiChevronRight size={14} color={C.blue}/>
-                    </td>
+                    <td style={{ padding:"16px 10px", textAlign:"center" }}><FiChevronRight size={14} color={C.blue}/></td>
                     <td style={{ padding:"16px 20px", textAlign:"right" }}>
-                      <span style={{ fontSize:"1rem", fontWeight:800, color:C.blue,
-                        letterSpacing:"-0.02em" }}>Rs. {PRED.total.toLocaleString()}</span>
+                      <span style={{ fontSize:"1rem", fontWeight:800, color:C.blue, letterSpacing:"-0.02em" }}>
+                        Rs. {PRED.total.toLocaleString()}
+                      </span>
                     </td>
-                    <td style={{ padding:"16px 20px", textAlign:"right" }}>
-                      <Badge val={PRED.costChange}/>
-                    </td>
+                    <td style={{ padding:"16px 20px", textAlign:"right" }}><Badge val={PRED.costChange}/></td>
                   </tr>
                 </tbody>
               </table>
             </div>
-
-            {/* Sparkline footer */}
             <div style={{ padding:"16px 24px", borderTop:`1px solid ${C.border}`, background:C.hover,
               display:"flex", gap:24, flexWrap:"wrap", alignItems:"center" }}>
-              <p style={{ fontSize:"0.72rem", color:C.muted, margin:0, flex:1 }}>
-                📈 Bill trend over last 6 months
-              </p>
+              <p style={{ fontSize:"0.72rem", color:C.muted, margin:0, flex:1 }}>📈 Bill trend over last 6 months</p>
               <div style={{ flex:2, minWidth:200 }}>
                 <ResponsiveContainer width="100%" height={40}>
                   <AreaChart data={TREND} margin={{ top:4, right:4, left:4, bottom:4 }}>
@@ -485,28 +411,20 @@ export default function Dashboard({ user }) {
           </Card>
         </div>
 
-        {/* ══════════════════════════════════════
-            ANALYTICS
-        ══════════════════════════════════════ */}
+        {/* ANALYTICS */}
         <Label mb={12}>Analytics &amp; Trends</Label>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(420px,1fr))",
-          gap:20, marginBottom:20 }}>
-
-          {/* Usage Trend */}
-          <ChartCard className="fu fu4"
-            title="Monthly Usage Trend"
-            sub="Water & Electricity — last 6 months"
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(420px,1fr))", gap:20, marginBottom:20 }}>
+          <ChartCard title="Monthly Usage Trend" sub="Water & Electricity — last 6 months"
             action={
               <div style={{ display:"flex", background:C.hover, border:`1px solid ${C.border}`,
                 borderRadius:8, padding:3, gap:2 }}>
                 {["Water","Elec","Both"].map(t => (
                   <button key={t} onClick={() => setActiveTab(t)}
                     style={{ padding:"4px 10px", borderRadius:6, border:"none",
-                      background: activeTab===t?C.card:"transparent",
-                      color: activeTab===t?C.blue:C.muted,
+                      background:activeTab===t?C.card:"transparent",
+                      color:activeTab===t?C.blue:C.muted,
                       fontFamily:F, fontSize:"0.72rem", fontWeight:600,
-                      cursor:"pointer", boxShadow: activeTab===t?C.s1:"none",
-                      transition:"all .15s" }}>{t}</button>
+                      cursor:"pointer", boxShadow:activeTab===t?C.s1:"none", transition:"all .15s" }}>{t}</button>
                 ))}
               </div>
             }>
@@ -526,7 +444,8 @@ export default function Dashboard({ user }) {
                 <XAxis dataKey="m" tick={ax} axisLine={false} tickLine={false}/>
                 <YAxis tick={ax} axisLine={false} tickLine={false}/>
                 <Tooltip content={<Tip/>}/>
-                <ReferenceLine x="Dec*" stroke={C.blue} strokeDasharray="3 3" label={{ value:"Predicted", fill:C.blue, fontSize:10, position:"insideTopLeft" }}/>
+                <ReferenceLine x="Dec*" stroke={C.blue} strokeDasharray="3 3"
+                  label={{ value:"Predicted", fill:C.blue, fontSize:10, position:"insideTopLeft" }}/>
                 <Legend wrapperStyle={{ fontSize:"0.75rem", fontFamily:F, paddingTop:8 }}/>
                 {(activeTab==="Both"||activeTab==="Water") &&
                   <Area type="monotone" dataKey="water" stroke={C.teal} strokeWidth={2.5}
@@ -538,20 +457,15 @@ export default function Dashboard({ user }) {
             </ResponsiveContainer>
           </ChartCard>
 
-          {/* Cost Trend */}
-          <ChartCard className="fu fu4"
-            title="Monthly Bill Trend"
-            sub="Total billing cost over recent months (Rs.)">
+          <ChartCard title="Monthly Bill Trend" sub="Total billing cost over recent months (Rs.)">
             <ResponsiveContainer width="100%" height={230}>
               <BarChart data={COST_CMP} margin={{ top:10, right:16, left:-10, bottom:0 }} barCategoryGap="35%">
                 <CartesianGrid strokeDasharray="4 4" stroke="#e8eaf0" vertical={false}/>
                 <XAxis dataKey="m" tick={ax} axisLine={false} tickLine={false}/>
-                <YAxis tick={ax} axisLine={false} tickLine={false}
-                  tickFormatter={v=>`${(v/1000).toFixed(0)}k`}/>
+                <YAxis tick={ax} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/1000).toFixed(0)}k`}/>
                 <Tooltip content={<Tip prefix="Rs."/>}/>
                 <ReferenceLine x="Dec*" stroke={C.blue} strokeDasharray="3 3"/>
-                <Bar dataKey="cost" radius={[6,6,0,0]} name="Total Bill (Rs.)"
-                  fill={C.blue}>
+                <Bar dataKey="cost" radius={[6,6,0,0]} name="Total Bill (Rs.)" fill={C.blue}>
                   {COST_CMP.map((d,i) => (
                     <Cell key={i} fill={d.m==="Dec*"?C.blueL:C.blue}
                       stroke={d.m==="Dec*"?C.blue:"none"} strokeWidth={d.m==="Dec*"?2:0}/>
@@ -559,25 +473,18 @@ export default function Dashboard({ user }) {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-            {/* Insight callout */}
             <div style={{ margin:"0 8px", padding:"10px 14px", background:"#fffbeb",
               border:"1px solid #fde68a", borderRadius:9, display:"flex", gap:8, alignItems:"flex-start" }}>
               <FiAlertTriangle size={13} color={C.amber} style={{ marginTop:1, flexShrink:0 }}/>
               <p style={{ fontSize:"0.72rem", color:C.body, margin:0, lineHeight:1.55 }}>
-                <strong>Aug was your highest month</strong> (Rs. 8,400). Next month is predicted to be slightly higher than Nov. Consider off-peak usage.
+                <strong>Aug was your highest month</strong> (Rs. 8,400). Next month is predicted to be slightly higher than Nov.
               </p>
             </div>
           </ChartCard>
         </div>
 
-        {/* Bottom row: Pie + Per-utility bill chart */}
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(360px,1fr))",
-          gap:20, marginBottom:32 }}>
-
-          {/* Utility Distribution */}
-          <ChartCard className="fu fu5"
-            title="Bill Distribution"
-            sub="Share of total bill by utility category">
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(360px,1fr))", gap:20, marginBottom:32 }}>
+          <ChartCard title="Bill Distribution" sub="Share of total bill by utility category">
             <div style={{ display:"flex", alignItems:"center", gap:16, flexWrap:"wrap" }}>
               <ResponsiveContainer width={180} height={180}>
                 <PieChart>
@@ -591,7 +498,7 @@ export default function Dashboard({ user }) {
               </ResponsiveContainer>
               <div style={{ flex:1, minWidth:140 }}>
                 {PIE.map((d,i) => (
-                  <div key={i} style={{ marginBottom: i<PIE.length-1?14:0 }}>
+                  <div key={i} style={{ marginBottom:i<PIE.length-1?14:0 }}>
                     <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
                       <div style={{ display:"flex", alignItems:"center", gap:7 }}>
                         <span style={{ width:10, height:10, borderRadius:3, background:d.color, display:"inline-block" }}/>
@@ -607,43 +514,43 @@ export default function Dashboard({ user }) {
                 <div style={{ marginTop:14, padding:"10px 12px", background:C.blueL,
                   border:`1px solid ${C.blueM}`, borderRadius:8 }}>
                   <p style={{ fontSize:"0.7rem", color:C.blue, margin:0, lineHeight:1.55, fontWeight:500 }}>
-                    💡 Electricity is your biggest cost driver. Shifting laundry & AC usage to off-peak hours can save ~15%.
+                    💡 Electricity is your biggest cost driver. Shifting to off-peak hours can save ~15%.
                   </p>
                 </div>
               </div>
             </div>
           </ChartCard>
 
-          {/* Per-utility bill comparison bars */}
-          <ChartCard className="fu fu5"
-            title="Per-Utility Bill Comparison"
-            sub="Water vs Electricity billing last 6 months (Rs.)">
+          <ChartCard title="Per-Utility Bill Comparison" sub="Water vs Electricity billing last 6 months (Rs.)">
             <ResponsiveContainer width="100%" height={230}>
               <BarChart data={TREND} margin={{ top:10, right:16, left:-10, bottom:0 }} barCategoryGap="25%">
                 <CartesianGrid strokeDasharray="4 4" stroke="#e8eaf0" vertical={false}/>
                 <XAxis dataKey="m" tick={ax} axisLine={false} tickLine={false}/>
-                <YAxis tick={ax} axisLine={false} tickLine={false}
-                  tickFormatter={v=>`${(v/1000).toFixed(1)}k`}/>
+                <YAxis tick={ax} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/1000).toFixed(1)}k`}/>
                 <Tooltip content={<Tip prefix="Rs."/>}/>
                 <Legend wrapperStyle={{ fontSize:"0.75rem", fontFamily:F, paddingTop:8 }}/>
                 <ReferenceLine x="Dec*" stroke={C.blue} strokeDasharray="3 3"/>
-                <Bar dataKey="waterBill" fill={C.teal}  radius={[4,4,0,0]} name="Water (Rs.)"/>
-                <Bar dataKey="elecBill"  fill={C.blue}  radius={[4,4,0,0]} name="Electricity (Rs.)"/>
+                <Bar dataKey="waterBill" fill={C.teal} radius={[4,4,0,0]} name="Water (Rs.)"/>
+                <Bar dataKey="elecBill"  fill={C.blue} radius={[4,4,0,0]} name="Electricity (Rs.)"/>
               </BarChart>
             </ResponsiveContainer>
           </ChartCard>
         </div>
 
-        {/* ══════════════════════════════════════
-            ALERTS
-        ══════════════════════════════════════ */}
+        {/* ALERTS */}
         <Label mb={12}>Alerts &amp; Recommendations</Label>
         <div className="fu fu6" style={{ display:"grid",
           gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:12, marginBottom:8 }}>
           {[
-            { icon:<FiAlertTriangle size={17}/>, title:"Water Usage Rising",        body:"Predicted 10% increase next month. Check for dripping taps or over-irrigation.",   accent:C.amber, bg:C.amberL, bdr:C.amberM },
-            { icon:<FiCheckCircle size={17}/>,   title:"Electricity Trending Down",  body:"5% reduction forecast. Your conservation efforts from last month are paying off.",  accent:C.green, bg:C.greenL, bdr:C.greenM },
-            { icon:<FiActivity size={17}/>,      title:"Budget on Track",            body:`You've used ${CURRENT.budgetPct}% of your Rs.${CURRENT.budget.toLocaleString()} budget. Stay consistent to avoid overrun.`, accent:C.blue, bg:C.blueL, bdr:C.blueM },
+            { icon:<FiAlertTriangle size={17}/>, title:"Water Usage Rising",
+              body:"Predicted 10% increase next month. Check for dripping taps or over-irrigation.",
+              accent:C.amber, bg:C.amberL, bdr:C.amberM },
+            { icon:<FiCheckCircle size={17}/>, title:"Electricity Trending Down",
+              body:"5% reduction forecast. Your conservation efforts from last month are paying off.",
+              accent:C.green, bg:C.greenL, bdr:C.greenM },
+            { icon:<FiActivity size={17}/>, title:"Budget on Track",
+              body:`You've used ${CURRENT.budgetPct}% of your Rs.${CURRENT.budget.toLocaleString()} budget.`,
+              accent:C.blue, bg:C.blueL, bdr:C.blueM },
           ].map((a,i) => (
             <div key={i} className="db-hover"
               style={{ background:a.bg, border:`1px solid ${a.bdr}`, borderRadius:12,
