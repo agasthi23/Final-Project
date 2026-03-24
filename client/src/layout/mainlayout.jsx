@@ -1,8 +1,18 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import Sidebar from "../components/Sidebar";
 
 const MainLayout = ({ children }) => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [darkMode, setDarkMode] = useState(false);
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
 
   return (
     <div style={{
@@ -16,8 +26,15 @@ const MainLayout = ({ children }) => {
       height: '100vh',
       overflow: 'hidden'
     }}>
-      <Sidebar isOpen={sidebarOpen} setIsOpen={setSidebarOpen} />
-      
+      <Sidebar
+        isOpen={sidebarOpen}
+        setIsOpen={setSidebarOpen}
+        darkMode={darkMode}
+        onToggleDarkMode={() => setDarkMode(p => !p)}
+        user={user}
+        onLogout={handleLogout}
+      />
+
       <div style={{
         flex: 1,
         padding: '2rem',
