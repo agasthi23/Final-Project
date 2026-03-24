@@ -1,0 +1,57 @@
+/* This is a new file. Create it in the same folder as Toast.jsx */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.toast {
+  background: white;
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 300px;
+  margin-bottom: 10px;
+  border-left: 5px solid;
+  animation: slideIn 0.3s ease-out;
+}
+
+.toast.critical {
+  border-left-color: #ef4444;
+}
+
+.toast.warning {
+  border-left-color: #f59e0b;
+}
+
+.toast.success {
+  border-left-color: #10b981;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding-left: 16px;
+  color: #6b7280;
+}
+
+.toast-close:hover {
+  color: #374151;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
