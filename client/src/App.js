@@ -23,6 +23,7 @@ import AdminLayout from "./layout/AdminLayout";
 import AdminDashboard   from "./pages/admin/AdminDashboard";
 import TariffManagement from "./pages/admin/tariff";
 import UserManagement   from "./pages/admin/UserManagement";
+import AdminProtectedRoute from './components/AdminProtectedRoute';
 
 import './styles/theme.css';
 
@@ -79,21 +80,21 @@ function App() {
           } />
 
           {/* ── Admin protected routes ── */}
-          <Route path="/admin" element={
-            <ProtectedRoute>
-              <AdminLayout><AdminDashboard /></AdminLayout>
-            </ProtectedRoute>
-          } />
-          <Route path="/admin/tariff" element={
-            <ProtectedRoute>
-              <AdminLayout><TariffManagement /></AdminLayout>
-            </ProtectedRoute>
-          } />
-          <Route path="/admin/users" element={
-            <ProtectedRoute>
-              <AdminLayout><UserManagement /></AdminLayout>
-            </ProtectedRoute>
-          } />
+<Route path="/admin" element={
+  <AdminProtectedRoute>
+    <AdminLayout><AdminDashboard /></AdminLayout>
+  </AdminProtectedRoute>
+} />
+<Route path="/admin/tariff" element={
+  <AdminProtectedRoute>
+    <AdminLayout><TariffManagement /></AdminLayout>
+  </AdminProtectedRoute>
+} />
+<Route path="/admin/users" element={
+  <AdminProtectedRoute>
+    <AdminLayout><UserManagement /></AdminLayout>
+  </AdminProtectedRoute>
+} />
 
         </Routes>
       </Router>
