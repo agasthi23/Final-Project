@@ -1,5 +1,4 @@
 // src/pages/Analytics.jsx
-// ORIGINAL logic 100% preserved — only design tokens updated to match dashboard
 import { useState, useMemo } from "react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -8,12 +7,12 @@ import {
   LineChart, Line,
 } from "recharts";
 import {
-  FiBarChart2, FiTrendingUp, FiDollarSign, FiZap, FiDroplet,
+  FiBarChart2, FiTrendingUp, FiDollarSign, FiZap, FiDroplet, FiWifi,
   FiAlertTriangle, FiCheckCircle, FiActivity, FiDownload,
   FiInfo, FiTarget, FiList, FiCpu, FiStar,
 } from "react-icons/fi";
 
-/* ─── Font (shared with dashboard) ─── */
+/* ─── Font ─── */
 if (!document.getElementById("db-font")) {
   const l = document.createElement("link");
   l.id = "db-font"; l.rel = "stylesheet";
@@ -41,7 +40,7 @@ if (!document.getElementById("an-anim")) {
   document.head.appendChild(s);
 }
 
-/* ════ TOKENS — identical to Dashboard ════ */
+/* ════ TOKENS ════ */
 const C = {
   page:"#f3f4f8", card:"#fff", hover:"#f0f2f7",
   ink:"#0f172a", body:"#334155", muted:"#64748b", faint:"#94a3b8",
@@ -52,6 +51,7 @@ const C = {
   amber:"#d97706", amberL:"#fffbeb", amberM:"#fde68a",
   red:"#dc2626",   redL:"#fef2f2",   redM:"#fecaca",
   violet:"#7c3aed",violetL:"#f5f3ff",violetM:"#ddd6fe",
+  indigo:"#4f46e5",indigoL:"#eef2ff",indigoM:"#c7d2fe",
   s1:"0 1px 3px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04)",
   s2:"0 4px 16px rgba(15,23,42,.08),0 2px 4px rgba(15,23,42,.04)",
   s3:"0 12px 40px rgba(15,23,42,.10),0 4px 8px rgba(15,23,42,.04)",
@@ -59,7 +59,15 @@ const C = {
 const F = "'Plus Jakarta Sans',-apple-system,sans-serif";
 const ax = { fill:C.faint, fontSize:11, fontFamily:F };
 
-/* ════ ORIGINAL DATA (unchanged) ════ */
+/* ── Utility meta ── */
+const UTIL_META = {
+  Electricity: { color:C.blue,   bg:C.blueL,   bdr:C.blueM,   icon:(s)=><FiZap size={s}/>,     flatRate:false },
+  Water:       { color:C.teal,   bg:C.tealL,   bdr:C.tealM,   icon:(s)=><FiDroplet size={s}/>, flatRate:false },
+  Internet:    { color:C.indigo, bg:C.indigoL, bdr:C.indigoM, icon:(s)=><FiWifi size={s}/>,    flatRate:true  },
+};
+const UTILITIES = Object.keys(UTIL_META);
+
+/* ════ DATA ════ */
 const billsData = [
   { billingMonth:"Jan", utilityType:"Electricity", unitsUsed:320, billAmount:4800 },
   { billingMonth:"Feb", utilityType:"Electricity", unitsUsed:280, billAmount:4200 },
@@ -73,22 +81,29 @@ const billsData = [
   { billingMonth:"Apr", utilityType:"Water",       unitsUsed:44,  billAmount:880  },
   { billingMonth:"May", utilityType:"Water",       unitsUsed:46,  billAmount:920  },
   { billingMonth:"Jun", utilityType:"Water",       unitsUsed:50,  billAmount:1000 },
+  // ── Internet (flat-rate) ──
+  { billingMonth:"Jan", utilityType:"Internet",    unitsUsed:0,   billAmount:3500 },
+  { billingMonth:"Feb", utilityType:"Internet",    unitsUsed:0,   billAmount:3500 },
+  { billingMonth:"Mar", utilityType:"Internet",    unitsUsed:0,   billAmount:4200 },
+  { billingMonth:"Apr", utilityType:"Internet",    unitsUsed:0,   billAmount:4200 },
+  { billingMonth:"May", utilityType:"Internet",    unitsUsed:0,   billAmount:4200 },
+  { billingMonth:"Jun", utilityType:"Internet",    unitsUsed:0,   billAmount:4200 },
 ];
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun"];
 
-/* ════ ORIGINAL HELPERS (unchanged) ════ */
+/* ════ HELPERS ════ */
 const exportToCSV = (data, filename) => {
   if (!data.length) return;
   const headers = Object.keys(data[0]).join(",");
-  const rows = data.map(row => Object.values(row).join(",")).join("\n");
-  const blob = new Blob([`${headers}\n${rows}`], { type:"text/csv" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
+  const rows    = data.map(r => Object.values(r).join(",")).join("\n");
+  const blob    = new Blob([`${headers}\n${rows}`], { type:"text/csv" });
+  const url     = URL.createObjectURL(blob);
+  const a       = document.createElement("a");
   a.href=url; a.download=filename; a.click();
   URL.revokeObjectURL(url);
 };
 
-/* ════ SHARED UI BITS ════ */
+/* ════ SHARED UI ════ */
 const SectionLabel = ({ children }) => (
   <p style={{ fontSize:"0.63rem", fontWeight:800, letterSpacing:"0.15em",
     textTransform:"uppercase", color:C.faint, margin:"0 0 12px", fontFamily:F }}>
@@ -96,7 +111,6 @@ const SectionLabel = ({ children }) => (
   </p>
 );
 
-/* Tooltip — matches dashboard style */
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
   return (
@@ -109,7 +123,8 @@ const CustomTooltip = ({ active, payload, label }) => {
           <span style={{ width:8, height:8, borderRadius:2, background:p.color, display:"inline-block" }}/>
           <span style={{ fontSize:"0.75rem", color:C.muted, flex:1 }}>{p.name}</span>
           <span style={{ fontSize:"0.8rem", fontWeight:700, color:C.ink }}>
-            {p.name?.toLowerCase().includes("cost") ? `Rs. ${Number(p.value).toLocaleString()}` : p.value}
+            {p.name?.toLowerCase().includes("cost") || p.name === "Internet"
+              ? `Rs. ${Number(p.value).toLocaleString()}` : p.value}
           </span>
         </div>
       ))}
@@ -152,25 +167,38 @@ const Analytics = () => {
   const [filter,       setFilter]       = useState("All");
   const [analysisView, setAnalysisView] = useState("overview");
 
-  /* ── ALL ORIGINAL DATA LOGIC — untouched ── */
+  const isFlat    = filter !== "All" && UTIL_META[filter]?.flatRate;
+  const isMetered = filter !== "All" && !UTIL_META[filter]?.flatRate;
+
+  /* ── Filtered data ── */
   const filteredData = useMemo(() =>
     filter === "All" ? billsData : billsData.filter(b => b.utilityType === filter),
   [filter]);
 
+  /* ── Stats — units are meaningless for Internet ── */
   const stats = useMemo(() => {
     const totalBills  = filteredData.length;
-    const totalUnits  = filteredData.reduce((s,b) => s + b.unitsUsed,  0);
-    const totalAmount = filteredData.reduce((s,b) => s + b.billAmount, 0);
-    const avgUsage    = totalBills ? Math.round(totalUnits / totalBills) : 0;
-    const costPerUnit = totalUnits ? (totalAmount / totalUnits).toFixed(2) : 0;
-    const peak        = filteredData.reduce((mx,b) => b.unitsUsed > mx.unitsUsed ? b : mx, filteredData[0] || {});
-    return { totalBills, totalUnits, totalAmount, avgUsage, costPerUnit,
-      peakUsage:peak.unitsUsed||0, peakMonth:peak.billingMonth||"N/A" };
-  }, [filteredData]);
+    const totalAmount = filteredData.reduce((s,b) => s+b.billAmount, 0);
+    // For Internet filter: skip unit-based metrics
+    const meteredRows = isFlat ? [] : filteredData.filter(b => !UTIL_META[b.utilityType]?.flatRate);
+    const totalUnits  = meteredRows.reduce((s,b) => s+b.unitsUsed, 0);
+    const avgUsage    = meteredRows.length ? Math.round(totalUnits/meteredRows.length) : 0;
+    const costPerUnit = totalUnits ? (meteredRows.reduce((s,b)=>s+b.billAmount,0)/totalUnits).toFixed(2) : "N/A";
+    const peak        = meteredRows.length
+      ? meteredRows.reduce((mx,b) => b.unitsUsed>mx.unitsUsed?b:mx, meteredRows[0])
+      : filteredData.reduce((mx,b) => b.billAmount>mx.billAmount?b:mx, filteredData[0]||{});
+    return {
+      totalBills, totalUnits, totalAmount, avgUsage, costPerUnit,
+      peakUsage:  isFlat ? `Rs. ${(peak.billAmount||0).toLocaleString()}` : (peak.unitsUsed||0),
+      peakMonth:  peak.billingMonth||"N/A",
+    };
+  }, [filteredData, isFlat]);
 
+  /* ── Monthly usage chart — Internet excluded (no units) ── */
   const monthlyUsageData = useMemo(() => {
     const map = {};
     filteredData.forEach(b => {
+      if (UTIL_META[b.utilityType]?.flatRate) return; // skip flat-rate
       if (!map[b.billingMonth]) map[b.billingMonth] = { month:b.billingMonth };
       map[b.billingMonth][b.utilityType] = b.unitsUsed;
       map[b.billingMonth][`${b.utilityType}Cost`] = b.billAmount;
@@ -178,6 +206,7 @@ const Analytics = () => {
     return MONTHS.filter(m => map[m]).map(m => map[m]);
   }, [filteredData]);
 
+  /* ── Monthly cost chart — includes Internet ── */
   const monthlyCostData = useMemo(() => {
     const map = {};
     filteredData.forEach(b => {
@@ -188,6 +217,7 @@ const Analytics = () => {
     return MONTHS.filter(m => map[m]).map(m => map[m]);
   }, [filteredData]);
 
+  /* ── Pie distribution — cost-based so Internet participates ── */
   const distributionData = useMemo(() => {
     const dist = {};
     filteredData.forEach(b => {
@@ -195,17 +225,19 @@ const Analytics = () => {
       dist[b.utilityType].units += b.unitsUsed;
       dist[b.utilityType].cost  += b.billAmount;
     });
-    const total = Object.values(dist).reduce((s,d) => s+d.units, 0);
+    const totalCost = Object.values(dist).reduce((s,d) => s+d.cost, 0);
     return Object.entries(dist).map(([name,d]) => ({
-      name, value:d.units, cost:d.cost,
-      percentage:Math.round((d.units/total)*100),
-      color: name==="Electricity" ? C.blue : C.teal,
+      name, value:d.cost, units:d.units,   // value = cost so Internet shows up
+      percentage: Math.round((d.cost/totalCost)*100),
+      color: UTIL_META[name]?.color || C.blue,
     }));
   }, [filteredData]);
 
+  /* ── Efficiency — cost/unit, skip Internet ── */
   const efficiencyData = useMemo(() => {
     const map = {};
     filteredData.forEach(b => {
+      if (UTIL_META[b.utilityType]?.flatRate) return;
       if (!map[b.billingMonth]) map[b.billingMonth] = { month:b.billingMonth, units:0, cost:0 };
       map[b.billingMonth].units += b.unitsUsed;
       map[b.billingMonth].cost  += b.billAmount;
@@ -215,20 +247,32 @@ const Analytics = () => {
     }));
   }, [filteredData]);
 
+  /* ── Comparison data — only metered utilities ── */
   const comparisonData = useMemo(() => {
     const map = {};
     filteredData.forEach(b => {
+      if (UTIL_META[b.utilityType]?.flatRate) return;
       if (!map[b.billingMonth]) map[b.billingMonth] = { month:b.billingMonth, Electricity:0, Water:0 };
       map[b.billingMonth][b.utilityType] = b.unitsUsed;
     });
     const rows = MONTHS.filter(m => map[m]).map(m => map[m]);
-    const avg  = rows.reduce((s,r) => s+r.Electricity+r.Water, 0) / (rows.length||1);
+    const avg  = rows.reduce((s,r) => s+r.Electricity+r.Water, 0)/(rows.length||1);
     return rows.map(r => ({ ...r, Average:Math.round(avg) }));
   }, [filteredData]);
 
+  /* ── Internet monthly cost trend (for comparison view) ── */
+  const internetCostData = useMemo(() => {
+    const rows = billsData.filter(b => b.utilityType==="Internet");
+    const map  = {};
+    rows.forEach(b => { map[b.billingMonth] = b.billAmount; });
+    return MONTHS.filter(m => map[m]).map(m => ({ month:m, Internet:map[m] }));
+  }, []);
+
+  /* ── Radar — original logic, add Internet spend score ── */
   const radarData = useMemo(() => {
     const elec = billsData.filter(b => b.utilityType==="Electricity");
     const watr = billsData.filter(b => b.utilityType==="Water");
+    const net  = billsData.filter(b => b.utilityType==="Internet");
     const score = (val,min,max) => Math.round(100-((val-min)/(max-min))*50);
     const eCPU = elec.reduce((s,b)=>s+b.billAmount/b.unitsUsed,0)/elec.length;
     const wCPU = watr.reduce((s,b)=>s+b.billAmount/b.unitsUsed,0)/watr.length;
@@ -239,105 +283,158 @@ const Analytics = () => {
     const eTrend=eU[eU.length-1]<eU[0]?85:60, wTrend=wU[wU.length-1]<wU[0]?85:65;
     const eBudget=elec.filter(b=>b.billAmount<5000).length/elec.length*100;
     const wBudget=watr.filter(b=>b.billAmount<950).length/watr.length*100;
+    // Internet: rate consistency score (lower variance = higher score)
+    const nAmts = net.map(b=>b.billAmount);
+    const nVar  = variance(nAmts);
+    const nConsistency = Math.max(50, 100-Math.round(nVar/10000));
+    const nBudget = net.filter(b=>b.billAmount<=4200).length/net.length*100;
     return [
-      { metric:"Efficiency",       Electricity:score(eCPU,12,18), Water:score(wCPU,18,22) },
-      { metric:"Cost Control",     Electricity:Math.round(eBudget), Water:Math.round(wBudget) },
-      { metric:"Usage Stability",  Electricity:Math.max(30,100-Math.round(variance(eU)/100)), Water:Math.max(30,100-Math.round(variance(wU)*10)) },
-      { metric:"Peak Management",  Electricity:Math.round((1-(ePeak-eAvg)/eAvg)*100), Water:Math.round((1-(wPeak-wAvg)/wAvg)*100) },
-      { metric:"Trend",            Electricity:eTrend, Water:wTrend },
-      { metric:"Budget Adherence", Electricity:Math.round(eBudget*0.9), Water:Math.round(wBudget*0.95) },
+      { metric:"Efficiency",       Electricity:score(eCPU,12,18), Water:score(wCPU,18,22), Internet:nConsistency },
+      { metric:"Cost Control",     Electricity:Math.round(eBudget), Water:Math.round(wBudget), Internet:Math.round(nBudget) },
+      { metric:"Usage Stability",  Electricity:Math.max(30,100-Math.round(variance(eU)/100)), Water:Math.max(30,100-Math.round(variance(wU)*10)), Internet:nConsistency },
+      { metric:"Peak Management",  Electricity:Math.round((1-(ePeak-eAvg)/eAvg)*100), Water:Math.round((1-(wPeak-wAvg)/wAvg)*100), Internet:nConsistency },
+      { metric:"Trend",            Electricity:eTrend, Water:wTrend, Internet:nAmts[nAmts.length-1]<=nAmts[0]?85:65 },
+      { metric:"Budget Adherence", Electricity:Math.round(eBudget*0.9), Water:Math.round(wBudget*0.95), Internet:Math.round(nBudget*0.97) },
     ];
   }, []);
 
-  /* insights — original logic, currency changed LKR → Rs. */
+  /* ── Insights — extended for Internet ── */
   const insights = useMemo(() => {
     const result = [];
-    const recent=filteredData.slice(-4), older=filteredData.slice(-8,-4);
-    const rAvg=recent.reduce((s,b)=>s+b.unitsUsed,0)/(recent.length||1);
-    const oAvg=older.reduce((s,b)=>s+b.unitsUsed,0)/(older.length||1);
-    const trend=rAvg>oAvg?"increasing":"decreasing";
-    const pct=Math.abs(Math.round(((rAvg-oAvg)/(oAvg||1))*100));
+    const recent = filteredData.slice(-4), older = filteredData.slice(-8,-4);
+    const rAvg = recent.reduce((s,b)=>s+b.billAmount,0)/(recent.length||1);
+    const oAvg = older.reduce((s,b)=>s+b.billAmount,0)/(older.length||1);
+    const trend = rAvg>oAvg ? "increasing" : "decreasing";
+    const pct   = Math.abs(Math.round(((rAvg-oAvg)/(oAvg||1))*100));
     result.push({ type:trend==="increasing"?"warning":"success", icon:<FiTrendingUp size={15}/>,
-      title:"Usage Trend Analysis", text:`Consumption is ${trend} by ${pct}% vs the previous period.`,
+      title:"Spend Trend Analysis",
+      text:`Total spend is ${trend} by ${pct}% vs the previous period.`,
       value:"Strategic planning needed" });
-    const highCost=filteredData.filter(b=>b.billAmount/b.unitsUsed>15);
-    if (highCost.length) result.push({ type:"warning", icon:<FiDollarSign size={15}/>,
-      title:"Cost Efficiency Alert",
-      text:`${highCost.length} period(s) show elevated cost per unit (> Rs. 15). Review pricing tiers.`,
-      value:"Optimisation opportunity" });
-    const peakU=Math.max(...filteredData.map(b=>b.unitsUsed));
-    const peakM=filteredData.find(b=>b.unitsUsed===peakU)?.billingMonth;
+
+    if (!isFlat) {
+      const highCost = filteredData.filter(b => !UTIL_META[b.utilityType]?.flatRate && b.billAmount/b.unitsUsed > 15);
+      if (highCost.length) result.push({ type:"warning", icon:<FiDollarSign size={15}/>,
+        title:"Cost Efficiency Alert",
+        text:`${highCost.length} period(s) show elevated cost per unit (> Rs. 15). Review pricing tiers.`,
+        value:"Optimisation opportunity" });
+    }
+
+    const peakB = filteredData.reduce((mx,b) => b.billAmount>mx.billAmount?b:mx, filteredData[0]);
     result.push({ type:"info", icon:<FiActivity size={15}/>,
-      title:"Peak Usage Analysis",
-      text:`Highest recorded: ${peakU} units in ${peakM}. Plan capacity for similar periods.`,
+      title:"Peak Expenditure",
+      text:`Highest bill: Rs. ${peakB.billAmount?.toLocaleString()} (${peakB.utilityType}) in ${peakB.billingMonth}.`,
       value:"Capacity planning" });
-    const waterRows=filteredData.filter(b=>b.utilityType==="Water").slice(-3);
+
+    const waterRows = filteredData.filter(b=>b.utilityType==="Water").slice(-3);
     if (waterRows.length) {
-      const avgW=waterRows.reduce((s,b)=>s+b.unitsUsed,0)/waterRows.length;
+      const avgW = waterRows.reduce((s,b)=>s+b.unitsUsed,0)/waterRows.length;
       if (avgW>44) result.push({ type:"warning", icon:<FiAlertTriangle size={15}/>,
         title:"Water Conservation Alert",
         text:`Avg water usage is elevated at ${Math.round(avgW)} units. Consider conservation measures.`,
         value:"Sustainability target" });
     }
-    const elecCost=filteredData.filter(b=>b.utilityType==="Electricity").reduce((s,b)=>s+b.billAmount,0);
-    result.push({ type:"success", icon:<FiCheckCircle size={15}/>,
+
+    const netRows = filteredData.filter(b=>b.utilityType==="Internet");
+    if (netRows.length >= 2) {
+      const changed = netRows.some((b,i)=>i>0 && b.billAmount!==netRows[i-1].billAmount);
+      result.push({ type:changed?"warning":"success", icon:<FiWifi size={15}/>,
+        title:"Internet Plan Status",
+        text:changed
+          ? `Internet charges varied — a possible plan upgrade detected. Latest: Rs. ${netRows[netRows.length-1]?.billAmount?.toLocaleString()}.`
+          : `Internet plan is stable at Rs. ${netRows[0]?.billAmount?.toLocaleString()}/month.`,
+        value:changed?"Review plan options":"Consistent spend" });
+    }
+
+    const elecCost = filteredData.filter(b=>b.utilityType==="Electricity").reduce((s,b)=>s+b.billAmount,0);
+    if (elecCost) result.push({ type:"success", icon:<FiCheckCircle size={15}/>,
       title:"Savings Potential",
       text:`Estimated Rs. ${Math.round(elecCost*0.1).toLocaleString()} monthly savings through electricity optimisation.`,
       value:"ROI: 3–6 months" });
-    return result;
-  }, [filteredData]);
 
-  /* recommendations — original, currency changed LKR → Rs. */
+    return result;
+  }, [filteredData, isFlat]);
+
   const recommendations = [
-    { icon:<FiCpu size={16}/>,       title:"Temperature Optimisation", desc:"Smart thermostat controls with 2°C adjustment to reduce HVAC load.", savings:"Rs. 450/mo", roi:"4 months", impl:"2 weeks"  },
-    { icon:<FiTrendingUp size={16}/>,title:"Time-of-Use Scheduling",   desc:"Shift 30% of consumption to off-peak hours via automated scheduling.", savings:"Rs. 320/mo", roi:"3 months", impl:"1 week"   },
-    { icon:<FiDroplet size={16}/>,   title:"Water Conservation",       desc:"Low-flow fixtures and real-time leak detection monitoring system.", savings:"Rs. 200/mo", roi:"6 months", impl:"3 weeks"  },
-    { icon:<FiActivity size={16}/>,  title:"Preventive Maintenance",   desc:"Scheduled equipment servicing to optimise efficiency and extend asset life.", savings:"Rs. 280/mo", roi:"5 months", impl:"Ongoing"  },
+    { icon:<FiCpu size={16}/>,       title:"Temperature Optimisation",  desc:"Smart thermostat controls with 2°C adjustment to reduce HVAC load.",                   savings:"Rs. 450/mo", roi:"4 months", impl:"2 weeks"  },
+    { icon:<FiTrendingUp size={16}/>,title:"Time-of-Use Scheduling",    desc:"Shift 30% of consumption to off-peak hours via automated scheduling.",                   savings:"Rs. 320/mo", roi:"3 months", impl:"1 week"   },
+    { icon:<FiDroplet size={16}/>,   title:"Water Conservation",        desc:"Low-flow fixtures and real-time leak detection monitoring system.",                       savings:"Rs. 200/mo", roi:"6 months", impl:"3 weeks"  },
+    { icon:<FiWifi size={16}/>,      title:"Internet Plan Review",      desc:"Compare available ISP plans. A bundle or downgrade could cut monthly costs significantly.", savings:"Rs. 500/mo", roi:"1 month",  impl:"1 week"   },
+    { icon:<FiActivity size={16}/>,  title:"Preventive Maintenance",    desc:"Scheduled equipment servicing to optimise efficiency and extend asset life.",              savings:"Rs. 280/mo", roi:"5 months", impl:"Ongoing"  },
   ];
 
-  /* insight type → colors */
-  const iColor = { warning:{ accent:C.amber, bg:C.amberL, bdr:C.amberM }, success:{ accent:C.green, bg:C.greenL, bdr:C.greenM }, info:{ accent:C.blue, bg:C.blueL, bdr:C.blueM } };
+  const iColor = {
+    warning:{ accent:C.amber, bg:C.amberL, bdr:C.amberM },
+    success:{ accent:C.green, bg:C.greenL, bdr:C.greenM },
+    info:   { accent:C.blue,  bg:C.blueL,  bdr:C.blueM  },
+  };
 
-  /* ════ VIEW RENDERERS — original chart logic, restyled ════ */
+  /* ════ VIEW RENDERERS ════ */
+
   const renderOverview = () => (
     <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:20, marginBottom:28 }}>
 
-      {/* Consumption Area — full width */}
-      <ChartCard cls="an-fu an-fu1" style={{ gridColumn:"1/-1" }}>
-        <ChartHead title="Consumption Trend" sub="Monthly usage across all utilities"
-          action={<ExportBtn onClick={() => exportToCSV(filteredData,"consumption.csv")}/>}/>
-        <div style={{ padding:"0 8px 20px" }}>
-          <ResponsiveContainer width="100%" height={280}>
-            <AreaChart data={monthlyUsageData} margin={{ top:10, right:16, left:-10, bottom:0 }}>
-              <defs>
-                <linearGradient id="gE" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor={C.blue} stopOpacity={0.2}/>
-                  <stop offset="95%" stopColor={C.blue} stopOpacity={0}/>
-                </linearGradient>
-                <linearGradient id="gW" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%"  stopColor={C.teal} stopOpacity={0.2}/>
-                  <stop offset="95%" stopColor={C.teal} stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
-              <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
-              <YAxis tick={ax} axisLine={false} tickLine={false}/>
-              <Tooltip content={<CustomTooltip/>}/>
-              <Legend wrapperStyle={{ fontSize:"0.75rem", fontFamily:F, paddingTop:8 }}/>
-              {(filter==="All"||filter==="Electricity") &&
-                <Area type="monotone" dataKey="Electricity" stroke={C.blue} strokeWidth={2.5}
-                  fill="url(#gE)" dot={{ fill:C.blue, r:4 }} activeDot={{ r:6 }}/>}
-              {(filter==="All"||filter==="Water") &&
-                <Area type="monotone" dataKey="Water" stroke={C.teal} strokeWidth={2.5}
-                  fill="url(#gW)" dot={{ fill:C.teal, r:4 }} activeDot={{ r:6 }}/>}
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </ChartCard>
+      {/* Consumption Area — metered only; replaced by cost chart for Internet-only */}
+      {!isFlat ? (
+        <ChartCard cls="an-fu an-fu1" style={{ gridColumn:"1/-1" }}>
+          <ChartHead title="Consumption Trend" sub="Monthly unit usage (metered utilities)"
+            action={<ExportBtn onClick={() => exportToCSV(filteredData,"consumption.csv")}/>}/>
+          <div style={{ padding:"0 8px 20px" }}>
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={monthlyUsageData} margin={{ top:10, right:16, left:-10, bottom:0 }}>
+                <defs>
+                  <linearGradient id="gE" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor={C.blue}  stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor={C.blue}  stopOpacity={0}/>
+                  </linearGradient>
+                  <linearGradient id="gW" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor={C.teal}  stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor={C.teal}  stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
+                <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
+                <YAxis tick={ax} axisLine={false} tickLine={false}/>
+                <Tooltip content={<CustomTooltip/>}/>
+                <Legend wrapperStyle={{ fontSize:"0.75rem", fontFamily:F, paddingTop:8 }}/>
+                {(filter==="All"||filter==="Electricity") &&
+                  <Area type="monotone" dataKey="Electricity" stroke={C.blue} strokeWidth={2.5}
+                    fill="url(#gE)" dot={{ fill:C.blue, r:4 }} activeDot={{ r:6 }}/>}
+                {(filter==="All"||filter==="Water") &&
+                  <Area type="monotone" dataKey="Water" stroke={C.teal} strokeWidth={2.5}
+                    fill="url(#gW)" dot={{ fill:C.teal, r:4 }} activeDot={{ r:6 }}/>}
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </ChartCard>
+      ) : (
+        /* Internet-only: show flat-rate bill trend spanning full width */
+        <ChartCard cls="an-fu an-fu1" style={{ gridColumn:"1/-1" }}>
+          <ChartHead title="Monthly Internet Bill Trend" sub="Flat-rate plan charges over time"
+            action={<ExportBtn onClick={() => exportToCSV(filteredData,"internet-cost.csv")}/>}/>
+          <div style={{ padding:"0 8px 20px" }}>
+            <ResponsiveContainer width="100%" height={280}>
+              <AreaChart data={monthlyCostData} margin={{ top:10, right:16, left:-10, bottom:0 }}>
+                <defs>
+                  <linearGradient id="gI" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%"  stopColor={C.indigo} stopOpacity={0.2}/>
+                    <stop offset="95%" stopColor={C.indigo} stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
+                <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
+                <YAxis tick={ax} axisLine={false} tickLine={false}/>
+                <Tooltip content={<CustomTooltip/>}/>
+                <Area type="monotone" dataKey="Internet" stroke={C.indigo} strokeWidth={2.5}
+                  fill="url(#gI)" dot={{ fill:C.indigo, r:4 }} activeDot={{ r:6 }}/>
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+        </ChartCard>
+      )}
 
-      {/* Distribution Pie */}
+      {/* Distribution Pie — cost-based so Internet is included */}
       <ChartCard cls="an-fu an-fu2">
-        <ChartHead title="Cost Allocation" sub="Budget distribution by utility"/>
+        <ChartHead title="Cost Allocation" sub="Budget distribution by utility (Rs.)"/>
         <div style={{ padding:"0 20px 20px" }}>
           <ResponsiveContainer width="100%" height={200}>
             <PieChart>
@@ -345,7 +442,8 @@ const Analytics = () => {
                 paddingAngle={4} dataKey="value">
                 {distributionData.map((e,i) => <Cell key={i} fill={e.color}/>)}
               </Pie>
-              <Tooltip contentStyle={{ fontFamily:F, borderRadius:10, border:`1px solid ${C.border}`, boxShadow:C.s3 }}/>
+              <Tooltip contentStyle={{ fontFamily:F, borderRadius:10, border:`1px solid ${C.border}`, boxShadow:C.s3 }}
+                formatter={v=>[`Rs. ${v.toLocaleString()}`, "Spend"]}/>
             </PieChart>
           </ResponsiveContainer>
           <div style={{ display:"flex", flexDirection:"column", gap:10,
@@ -356,7 +454,7 @@ const Analytics = () => {
                 <div style={{ flex:1 }}>
                   <span style={{ fontSize:"0.82rem", fontWeight:600, color:C.body }}>{e.name}</span>
                   <span style={{ fontSize:"0.72rem", color:C.faint, marginLeft:8 }}>
-                    {e.value} units · {e.percentage}% · Rs. {e.cost.toLocaleString()}
+                    {UTIL_META[e.name]?.flatRate ? "Flat-rate" : `${e.units} units`} · {e.percentage}% · Rs. {e.value.toLocaleString()}
                   </span>
                 </div>
               </div>
@@ -365,21 +463,38 @@ const Analytics = () => {
         </div>
       </ChartCard>
 
-      {/* Cost per unit bar */}
-      <ChartCard cls="an-fu an-fu3">
-        <ChartHead title="Cost per Unit" sub="Monthly unit cost efficiency"/>
-        <div style={{ padding:"0 8px 20px" }}>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={efficiencyData} barSize={28}>
-              <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
-              <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
-              <YAxis tick={ax} axisLine={false} tickLine={false}/>
-              <Tooltip content={<CustomTooltip/>}/>
-              <Bar dataKey="Cost/Unit" fill={C.violet} radius={[6,6,0,0]}/>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </ChartCard>
+      {/* Cost per unit bar — hidden for Internet-only; shows total cost bar instead */}
+      {!isFlat ? (
+        <ChartCard cls="an-fu an-fu3">
+          <ChartHead title="Cost per Unit" sub="Monthly unit cost efficiency"/>
+          <div style={{ padding:"0 8px 20px" }}>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={efficiencyData} barSize={28}>
+                <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
+                <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
+                <YAxis tick={ax} axisLine={false} tickLine={false}/>
+                <Tooltip content={<CustomTooltip/>}/>
+                <Bar dataKey="Cost/Unit" fill={C.violet} radius={[6,6,0,0]}/>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </ChartCard>
+      ) : (
+        <ChartCard cls="an-fu an-fu3">
+          <ChartHead title="Monthly Spend Breakdown" sub="Total bill amount per month"/>
+          <div style={{ padding:"0 8px 20px" }}>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={monthlyCostData} barSize={28}>
+                <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
+                <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
+                <YAxis tick={ax} axisLine={false} tickLine={false}/>
+                <Tooltip content={<CustomTooltip/>}/>
+                <Bar dataKey="Internet" fill={C.indigo} radius={[6,6,0,0]}/>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </ChartCard>
+      )}
     </div>
   );
 
@@ -402,36 +517,66 @@ const Analytics = () => {
               {(filter==="All"||filter==="Water") &&
                 <Line type="monotone" dataKey="Water" stroke={C.teal} strokeWidth={2.5}
                   dot={{ r:5, fill:C.teal }} activeDot={{ r:7 }}/>}
+              {(filter==="All"||filter==="Internet") &&
+                <Line type="monotone" dataKey="Internet" stroke={C.indigo} strokeWidth={2.5}
+                  strokeDasharray="6 3"
+                  dot={{ r:5, fill:C.indigo }} activeDot={{ r:7 }}/>}
             </LineChart>
           </ResponsiveContainer>
         </div>
       </ChartCard>
 
-      <ChartCard cls="an-fu an-fu2">
-        <ChartHead title="Usage vs Cost Correlation" sub="Comparing consumption units against billing amounts"/>
-        <div style={{ padding:"0 8px 20px" }}>
-          <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={monthlyUsageData} margin={{ top:10, right:16, left:-10, bottom:0 }}>
-              <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
-              <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
-              <YAxis tick={ax} axisLine={false} tickLine={false}/>
-              <Tooltip content={<CustomTooltip/>}/>
-              <Legend wrapperStyle={{ fontSize:"0.75rem", fontFamily:F, paddingTop:8 }}/>
-              {(filter==="All"||filter==="Electricity") &&
-                <Bar dataKey="Electricity" fill={C.blue}  radius={[4,4,0,0]} barSize={20}/>}
-              {(filter==="All"||filter==="Water") &&
-                <Bar dataKey="Water"       fill={C.teal}  radius={[4,4,0,0]} barSize={20}/>}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </ChartCard>
+      {/* Usage vs Cost — only for metered utilities */}
+      {!isFlat && (
+        <ChartCard cls="an-fu an-fu2">
+          <ChartHead title="Usage vs Cost Correlation" sub="Comparing consumption units against billing amounts"/>
+          <div style={{ padding:"0 8px 20px" }}>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={monthlyUsageData} margin={{ top:10, right:16, left:-10, bottom:0 }}>
+                <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
+                <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
+                <YAxis tick={ax} axisLine={false} tickLine={false}/>
+                <Tooltip content={<CustomTooltip/>}/>
+                <Legend wrapperStyle={{ fontSize:"0.75rem", fontFamily:F, paddingTop:8 }}/>
+                {(filter==="All"||filter==="Electricity") &&
+                  <Bar dataKey="Electricity" fill={C.blue}  radius={[4,4,0,0]} barSize={20}/>}
+                {(filter==="All"||filter==="Water") &&
+                  <Bar dataKey="Water"       fill={C.teal}  radius={[4,4,0,0]} barSize={20}/>}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </ChartCard>
+      )}
+
+      {/* Internet flat-rate note when Internet-only */}
+      {isFlat && (
+        <ChartCard cls="an-fu an-fu2">
+          <div style={{ padding:"20px 24px", display:"flex", alignItems:"flex-start", gap:12 }}>
+            <div style={{ width:38, height:38, borderRadius:9, background:C.indigoL,
+              border:`1px solid ${C.indigoM}`, display:"flex", alignItems:"center",
+              justifyContent:"center", color:C.indigo, flexShrink:0 }}>
+              <FiInfo size={16}/>
+            </div>
+            <div>
+              <h4 style={{ fontSize:"0.875rem", fontWeight:700, color:C.ink, margin:"0 0 4px" }}>
+                No Unit Consumption Data
+              </h4>
+              <p style={{ fontSize:"0.8rem", color:C.muted, margin:0, lineHeight:1.6 }}>
+                Internet is billed at a flat rate — there are no units to track. The cost trend chart above shows
+                your plan charges over time. Switch to "All" to compare against metered utilities.
+              </p>
+            </div>
+          </div>
+        </ChartCard>
+      )}
     </div>
   );
 
   const renderEfficiency = () => (
     <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:20, marginBottom:28 }}>
       <ChartCard cls="an-fu an-fu1">
-        <ChartHead title="Performance Assessment Matrix" sub="Scores calculated from actual billing data"
+        <ChartHead title="Performance Assessment Matrix"
+          sub="Scores calculated from billing data — Internet uses plan consistency metrics"
           action={
             <span style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 10px",
               background:C.greenL, border:`1px solid ${C.greenM}`, borderRadius:20,
@@ -451,6 +596,9 @@ const Analytics = () => {
               {(filter==="All"||filter==="Water") &&
                 <Radar name="Water" dataKey="Water"
                   stroke={C.teal} fill={C.teal} fillOpacity={0.2} strokeWidth={2}/>}
+              {(filter==="All"||filter==="Internet") &&
+                <Radar name="Internet" dataKey="Internet"
+                  stroke={C.indigo} fill={C.indigo} fillOpacity={0.15} strokeWidth={2}/>}
               <Legend wrapperStyle={{ fontSize:"0.75rem", fontFamily:F }}/>
               <Tooltip contentStyle={{ fontFamily:F, borderRadius:10, border:`1px solid ${C.border}` }}/>
             </RadarChart>
@@ -458,57 +606,94 @@ const Analytics = () => {
         </div>
       </ChartCard>
 
-      <ChartCard cls="an-fu an-fu2">
-        <ChartHead title="Unit Cost Efficiency by Month" sub="Rs. per unit consumed — lower is better"
-          action={<ExportBtn onClick={() => exportToCSV(efficiencyData,"efficiency.csv")}/>}/>
-        <div style={{ padding:"0 8px 12px" }}>
-          <ResponsiveContainer width="100%" height={240}>
-            <BarChart data={efficiencyData} barSize={32}>
-              <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
-              <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
-              <YAxis tick={ax} axisLine={false} tickLine={false}/>
-              <Tooltip content={<CustomTooltip/>}/>
-              <Bar dataKey="Cost/Unit" radius={[6,6,0,0]}>
-                {efficiencyData.map((e,i) =>
-                  <Cell key={i} fill={e["Cost/Unit"]>15?C.red:C.violet}/>)}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div style={{ margin:"0 20px 20px", padding:"10px 14px", background:C.amberL,
-          border:`1px solid ${C.amberM}`, borderRadius:9, display:"flex", gap:8 }}>
-          <FiInfo size={13} color={C.amber} style={{ marginTop:1, flexShrink:0 }}/>
-          <p style={{ fontSize:"0.72rem", color:C.body, margin:0, lineHeight:1.55 }}>
-            <strong>Red bars</strong> indicate months where cost exceeded Rs. 15/unit — review pricing tiers.
-          </p>
-        </div>
-      </ChartCard>
+      {/* Unit cost bar — only for metered */}
+      {!isFlat && (
+        <ChartCard cls="an-fu an-fu2">
+          <ChartHead title="Unit Cost Efficiency by Month" sub="Rs. per unit consumed — lower is better"
+            action={<ExportBtn onClick={() => exportToCSV(efficiencyData,"efficiency.csv")}/>}/>
+          <div style={{ padding:"0 8px 12px" }}>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={efficiencyData} barSize={32}>
+                <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
+                <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
+                <YAxis tick={ax} axisLine={false} tickLine={false}/>
+                <Tooltip content={<CustomTooltip/>}/>
+                <Bar dataKey="Cost/Unit" radius={[6,6,0,0]}>
+                  {efficiencyData.map((e,i) =>
+                    <Cell key={i} fill={e["Cost/Unit"]>15?C.red:C.violet}/>)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div style={{ margin:"0 20px 20px", padding:"10px 14px", background:C.amberL,
+            border:`1px solid ${C.amberM}`, borderRadius:9, display:"flex", gap:8 }}>
+            <FiInfo size={13} color={C.amber} style={{ marginTop:1, flexShrink:0 }}/>
+            <p style={{ fontSize:"0.72rem", color:C.body, margin:0, lineHeight:1.55 }}>
+              <strong>Red bars</strong> indicate months where cost exceeded Rs. 15/unit — review pricing tiers.
+            </p>
+          </div>
+        </ChartCard>
+      )}
+
+      {/* Internet-only: flat-rate consistency card */}
+      {isFlat && (
+        <ChartCard cls="an-fu an-fu2">
+          <ChartHead title="Plan Charge Consistency" sub="Monthly Internet bill vs plan average"/>
+          <div style={{ padding:"0 8px 20px" }}>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={monthlyCostData} barSize={32}>
+                <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
+                <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
+                <YAxis tick={ax} axisLine={false} tickLine={false}/>
+                <Tooltip content={<CustomTooltip/>}/>
+                <Bar dataKey="Internet" radius={[6,6,0,0]}>
+                  {monthlyCostData.map((e,i) => {
+                    const avg = monthlyCostData.reduce((s,r)=>s+(r.Internet||0),0)/monthlyCostData.length;
+                    return <Cell key={i} fill={(e.Internet||0)>avg?C.red:C.indigo}/>;
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          <div style={{ margin:"0 20px 20px", padding:"10px 14px", background:C.indigoL,
+            border:`1px solid ${C.indigoM}`, borderRadius:9, display:"flex", gap:8 }}>
+            <FiInfo size={13} color={C.indigo} style={{ marginTop:1, flexShrink:0 }}/>
+            <p style={{ fontSize:"0.72rem", color:C.body, margin:0, lineHeight:1.55 }}>
+              <strong>Red bars</strong> are months where the charge was above your period average — possible plan upgrade.
+            </p>
+          </div>
+        </ChartCard>
+      )}
     </div>
   );
 
   const renderComparison = () => (
     <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:20, marginBottom:28 }}>
-      <ChartCard cls="an-fu an-fu1">
-        <ChartHead title="Period-over-Period Benchmarking" sub="Monthly usage vs overall average baseline"
-          action={<ExportBtn onClick={() => exportToCSV(filteredData,"comparison.csv")}/>}/>
-        <div style={{ padding:"0 8px 20px" }}>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={comparisonData} barGap={4}>
-              <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
-              <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
-              <YAxis tick={ax} axisLine={false} tickLine={false}/>
-              <Tooltip content={<CustomTooltip/>}/>
-              <Legend wrapperStyle={{ fontSize:"0.75rem", fontFamily:F, paddingTop:8 }}/>
-              {(filter==="All"||filter==="Electricity") &&
-                <Bar dataKey="Electricity" fill={C.blue}  radius={[4,4,0,0]} barSize={18}/>}
-              {(filter==="All"||filter==="Water") &&
-                <Bar dataKey="Water"       fill={C.teal}  radius={[4,4,0,0]} barSize={18}/>}
-              <Bar dataKey="Average" fill={C.amber} radius={[4,4,0,0]} barSize={18}/>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </ChartCard>
+      {/* Benchmarking — metered only */}
+      {!isFlat && (
+        <ChartCard cls="an-fu an-fu1">
+          <ChartHead title="Period-over-Period Benchmarking" sub="Monthly usage vs overall average baseline"
+            action={<ExportBtn onClick={() => exportToCSV(filteredData,"comparison.csv")}/>}/>
+          <div style={{ padding:"0 8px 20px" }}>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={comparisonData} barGap={4}>
+                <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
+                <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
+                <YAxis tick={ax} axisLine={false} tickLine={false}/>
+                <Tooltip content={<CustomTooltip/>}/>
+                <Legend wrapperStyle={{ fontSize:"0.75rem", fontFamily:F, paddingTop:8 }}/>
+                {(filter==="All"||filter==="Electricity") &&
+                  <Bar dataKey="Electricity" fill={C.blue}  radius={[4,4,0,0]} barSize={18}/>}
+                {(filter==="All"||filter==="Water") &&
+                  <Bar dataKey="Water"       fill={C.teal}  radius={[4,4,0,0]} barSize={18}/>}
+                <Bar dataKey="Average" fill={C.amber} radius={[4,4,0,0]} barSize={18}/>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </ChartCard>
+      )}
 
+      {/* Stacked cost breakdown — always shown, includes Internet */}
       <ChartCard cls="an-fu an-fu2">
         <ChartHead title="Monthly Cost Breakdown" sub="Total bill amount stacked by utility type"/>
         <div style={{ padding:"0 8px 20px" }}>
@@ -522,7 +707,9 @@ const Analytics = () => {
               {(filter==="All"||filter==="Electricity") &&
                 <Bar dataKey="Electricity" stackId="a" fill={C.blue}/>}
               {(filter==="All"||filter==="Water") &&
-                <Bar dataKey="Water" stackId="a" fill={C.teal} radius={[4,4,0,0]}/>}
+                <Bar dataKey="Water"       stackId="a" fill={C.teal}/>}
+              {(filter==="All"||filter==="Internet") &&
+                <Bar dataKey="Internet"    stackId="a" fill={C.indigo} radius={filter==="All"?[4,4,0,0]:undefined}/>}
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -537,7 +724,7 @@ const Analytics = () => {
     <div style={{ minHeight:"100vh", background:C.page, fontFamily:F,
       color:C.ink, padding:"28px 32px 64px" }}>
 
-      {/* ── HEADER ── */}
+      {/* HEADER */}
       <div className="an-fu an-fu1" style={{ display:"flex", justifyContent:"space-between",
         alignItems:"flex-start", flexWrap:"wrap", gap:16, marginBottom:24 }}>
         <div>
@@ -549,39 +736,43 @@ const Analytics = () => {
           </p>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-          {/* Filter buttons — original 3 options */}
+          {/* Filter — now 4 buttons (All + 3 utilities) */}
           <div style={{ display:"flex", background:C.card, border:`1px solid ${C.border}`,
             borderRadius:10, padding:3, gap:2 }}>
-            {["All","Electricity","Water"].map(f => (
-              <button key={f} className="an-fbtn"
-                onClick={() => setFilter(f)}
-                style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 13px",
-                  borderRadius:8, border:"none", fontFamily:F, fontSize:"0.78rem", fontWeight:600,
-                  cursor:"pointer", transition:"all .15s",
-                  background: filter===f ? (f==="Electricity"?C.blue:f==="Water"?C.teal:"#0f172a") : "transparent",
-                  color:       filter===f ? "#fff" : C.muted,
-                  boxShadow:   filter===f ? C.s1 : "none" }}>
-                {f==="Electricity" && <FiZap size={11}/>}
-                {f==="Water"       && <FiDroplet size={11}/>}
-                {f==="All" ? "All Utilities" : f}
-              </button>
-            ))}
+            {["All", ...UTILITIES].map(f => {
+              const m    = UTIL_META[f];
+              const active = filter === f;
+              const activeBg = f==="All" ? "#0f172a" : m.color;
+              return (
+                <button key={f} className="an-fbtn" onClick={() => setFilter(f)}
+                  style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 13px",
+                    borderRadius:8, border:"none", fontFamily:F, fontSize:"0.78rem", fontWeight:600,
+                    cursor:"pointer", transition:"all .15s",
+                    background: active ? activeBg : "transparent",
+                    color:       active ? "#fff"   : C.muted,
+                    boxShadow:   active ? C.s1     : "none" }}>
+                  {f==="Electricity" && <FiZap size={11}/>}
+                  {f==="Water"       && <FiDroplet size={11}/>}
+                  {f==="Internet"    && <FiWifi size={11}/>}
+                  {f==="All" ? "All Utilities" : f}
+                </button>
+              );
+            })}
           </div>
           <ExportBtn onClick={() => exportToCSV(filteredData,"analytics-export.csv")}/>
         </div>
       </div>
 
-      {/* ── VIEW TABS — original 4 tabs ── */}
+      {/* VIEW TABS */}
       <div className="an-fu an-fu2" style={{ display:"flex", gap:3, marginBottom:24,
         background:C.card, border:`1px solid ${C.border}`, borderRadius:12, padding:4, overflowX:"auto" }}>
         {[
-          { id:"overview",   icon:<FiBarChart2 size={14}/>,   label:"Executive Overview"   },
-          { id:"trends",     icon:<FiTrendingUp size={14}/>,  label:"Trend Analysis"        },
-          { id:"efficiency", icon:<FiActivity size={14}/>,    label:"Efficiency Metrics"    },
-          { id:"comparison", icon:<FiTarget size={14}/>,      label:"Comparative Analysis"  },
+          { id:"overview",   icon:<FiBarChart2 size={14}/>,  label:"Executive Overview"  },
+          { id:"trends",     icon:<FiTrendingUp size={14}/>, label:"Trend Analysis"       },
+          { id:"efficiency", icon:<FiActivity size={14}/>,   label:"Efficiency Metrics"   },
+          { id:"comparison", icon:<FiTarget size={14}/>,     label:"Comparative Analysis" },
         ].map(v => (
-          <button key={v.id} className="an-vbtn"
-            onClick={() => setAnalysisView(v.id)}
+          <button key={v.id} className="an-vbtn" onClick={() => setAnalysisView(v.id)}
             style={{ display:"flex", alignItems:"center", gap:7, padding:"8px 16px",
               borderRadius:9, border:"none", fontFamily:F, fontSize:"0.82rem", fontWeight:600,
               cursor:"pointer", transition:"all .15s", whiteSpace:"nowrap", flexShrink:0,
@@ -592,23 +783,28 @@ const Analytics = () => {
         ))}
       </div>
 
-      {/* ── STAT CARDS — original 6 cards exactly ── */}
+      {/* STAT CARDS */}
       <SectionLabel>At a Glance</SectionLabel>
       <div className="an-fu an-fu3" style={{ display:"grid",
         gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:28 }}>
         {[
-          { icon:<FiBarChart2 size={16}/>,  label:"Billing Periods",    value:stats.totalBills,                              sub:"Complete cycle coverage",        badge:"+12% YoY",          up:true,  accent:C.blue,   bg:C.blueL,   bdr:C.blueM   },
-          { icon:<FiTrendingUp size={16}/>, label:"Total Consumption",  value:`${stats.totalUnits} units`,                   sub:"Aggregate utility usage",        badge:"+5% this quarter",  up:false, accent:C.teal,   bg:C.tealL,   bdr:C.tealM   },
-          { icon:<FiDollarSign size={16}/>, label:"Total Expenditure",  value:`Rs. ${stats.totalAmount.toLocaleString()}`,   sub:"Full financial overview",        badge:"+8% cost increase",  up:false, accent:C.violet, bg:C.violetL, bdr:C.violetM },
-          { icon:<FiActivity size={16}/>,   label:"Avg Usage / Period", value:stats.avgUsage,                                sub:"Per-period baseline",            badge:"-3% efficiency gain",up:true,  accent:C.green,  bg:C.greenL,  bdr:C.greenM  },
-          { icon:<FiDollarSign size={16}/>, label:"Cost per Unit",      value:`Rs. ${stats.costPerUnit}`,                    sub:"Unit cost efficiency",           badge:"Optimal range",      up:true,  accent:C.amber,  bg:C.amberL,  bdr:C.amberM  },
-          { icon:<FiZap size={16}/>,        label:"Peak Demand",        value:stats.peakUsage,                               sub:`Recorded in ${stats.peakMonth}`, badge:"Max period",         up:null,  accent:C.red,    bg:C.redL,    bdr:C.redM    },
+          { icon:<FiBarChart2 size={16}/>,  label:"Billing Periods",    value:stats.totalBills,                              sub:"Complete cycle coverage",          badge:"+12% YoY",           up:true,  accent:C.blue,   bg:C.blueL,   bdr:C.blueM   },
+          { icon:<FiTrendingUp size={16}/>, label:isFlat?"Bills Tracked":"Total Consumption",
+            value:isFlat?`${stats.totalBills} bills`:`${stats.totalUnits} units`,
+            sub:isFlat?"Flat-rate plan":"Aggregate utility usage",                                                             badge:"+5% this quarter",   up:false, accent:C.teal,   bg:C.tealL,   bdr:C.tealM   },
+          { icon:<FiDollarSign size={16}/>, label:"Total Expenditure",  value:`Rs. ${stats.totalAmount.toLocaleString()}`,   sub:"Full financial overview",          badge:"+8% cost increase",   up:false, accent:C.violet, bg:C.violetL, bdr:C.violetM },
+          { icon:<FiActivity size={16}/>,   label:isFlat?"Avg Monthly Spend":"Avg Usage / Period",
+            value:isFlat?`Rs. ${Math.round(stats.totalAmount/(stats.totalBills||1)).toLocaleString()}`:stats.avgUsage,
+            sub:isFlat?"Average plan charge":"Per-period baseline",                                                            badge:"-3% efficiency gain", up:true,  accent:C.green,  bg:C.greenL,  bdr:C.greenM  },
+          { icon:<FiDollarSign size={16}/>, label:"Cost per Unit",      value:isFlat?"Flat-rate":`Rs. ${stats.costPerUnit}`, sub:isFlat?"No unit billing":"Unit cost efficiency",   badge:"Optimal range",      up:true,  accent:C.amber,  bg:C.amberL,  bdr:C.amberM  },
+          { icon:<FiZap size={16}/>,        label:isFlat?"Peak Bill":"Peak Demand",
+            value:isFlat?stats.peakUsage:stats.peakUsage,
+            sub:`Recorded in ${stats.peakMonth}`,                                                                              badge:"Max period",          up:null,  accent:C.red,    bg:C.redL,    bdr:C.redM    },
         ].map((s,i) => (
           <div key={i} className="an-stat"
             style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14,
               overflow:"hidden", boxShadow:C.s1,
               transition:"transform .22s ease, box-shadow .22s ease" }}>
-            {/* colored top bar */}
             <div style={{ height:3, background:`linear-gradient(90deg,${s.accent},${s.accent}66)` }}/>
             <div style={{ padding:"16px 18px 18px" }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:12 }}>
@@ -617,9 +813,9 @@ const Analytics = () => {
                   justifyContent:"center", color:s.accent }}>{s.icon}</div>
                 <span style={{ fontSize:"0.68rem", fontWeight:700, padding:"2px 8px",
                   borderRadius:20, whiteSpace:"nowrap",
-                  background: s.up===true?C.greenL : s.up===false?C.amberL : C.blueL,
+                  background: s.up===true?C.greenL:s.up===false?C.amberL:C.blueL,
                   border:`1px solid ${s.up===true?C.greenM:s.up===false?C.amberM:C.blueM}`,
-                  color: s.up===true?C.green : s.up===false?C.amber : C.blue }}>
+                  color: s.up===true?C.green:s.up===false?C.amber:C.blue }}>
                   {s.badge}
                 </span>
               </div>
@@ -632,10 +828,10 @@ const Analytics = () => {
         ))}
       </div>
 
-      {/* ── ACTIVE VIEW ── */}
+      {/* ACTIVE VIEW */}
       {views[analysisView]()}
 
-      {/* ── INSIGHTS ── */}
+      {/* INSIGHTS */}
       <SectionLabel>Strategic Insights</SectionLabel>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
         marginBottom:14, flexWrap:"wrap", gap:8 }}>
@@ -680,7 +876,7 @@ const Analytics = () => {
         })}
       </div>
 
-      {/* ── RECOMMENDATIONS ── */}
+      {/* RECOMMENDATIONS */}
       <SectionLabel>Optimisation Recommendations</SectionLabel>
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
         marginBottom:14, flexWrap:"wrap", gap:8 }}>
@@ -689,7 +885,7 @@ const Analytics = () => {
         </p>
         <span style={{ fontSize:"0.72rem", fontWeight:700, color:C.green,
           background:C.greenL, border:`1px solid ${C.greenM}`, borderRadius:20, padding:"3px 10px" }}>
-          Total: Rs. 1,250/mo
+          Total: Rs. 1,750/mo
         </span>
       </div>
       <div className="an-fu an-fu6" style={{ display:"grid",
