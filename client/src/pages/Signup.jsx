@@ -1,12 +1,10 @@
 // src/pages/Signup.jsx
-// ORIGINAL logic 100% preserved — premium redesign
 import React, { useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { FiUser, FiMail, FiLock, FiArrowRight, FiCheck, FiZap, FiBarChart2, FiActivity } from 'react-icons/fi';
+import { FiUser, FiMail, FiLock, FiArrowRight, FiCheck, FiZap, FiBarChart2, FiActivity, FiEye, FiEyeOff } from 'react-icons/fi';
 import Logo from '../components/Logo';
 
-/* ─── Font — reuses auth-anim injected by Login if loaded, safe to re-inject ─── */
 if (!document.getElementById("db-font")) {
   const l = document.createElement("link");
   l.id = "db-font"; l.rel = "stylesheet";
@@ -47,17 +45,52 @@ if (!document.getElementById("auth-anim")) {
     }
     .au-btn-submit:disabled { opacity:.6; cursor:not-allowed; }
     .au-link:hover { color:#1d4ed8!important; }
+    .au-eye:hover { color:#475569!important; }
   `;
   document.head.appendChild(s);
 }
 
 const F = "'Plus Jakarta Sans',-apple-system,sans-serif";
 
+/* Field supports an optional eye toggle via showToggle + onToggle props */
+const Field = ({ label, name, type="text", value, placeholder, icon, error, onChange, showToggle, onToggle, visible }) => (
+  <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+    <label style={{ fontSize:"0.72rem", fontWeight:700, color:"#475569",
+      textTransform:"uppercase", letterSpacing:"0.07em" }}>{label}</label>
+    <div style={{ position:"relative" }}>
+      <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)",
+        color:"#94a3b8", pointerEvents:"none", display:"flex" }}>{icon}</span>
+      <input
+        type={showToggle ? (visible ? "text" : "password") : type}
+        name={name} value={value} onChange={onChange}
+        placeholder={placeholder}
+        className={`au-input${error?" err":""}`}
+        style={{ width:"100%", padding:`11px ${showToggle?"44px":"14px"} 11px 42px`,
+          border:`1.5px solid ${error?"#dc2626":"#e2e8f0"}`, borderRadius:12,
+          background:"#f8fafc", fontFamily:F, fontSize:"0.875rem",
+          color:"#0f172a", transition:"all .15s", boxSizing:"border-box",
+          boxShadow: error ? "0 0 0 4px rgba(254,202,202,.45)" : "none" }}/>
+      {/* Eye toggle button */}
+      {showToggle && (
+        <button type="button" className="au-eye" onClick={onToggle}
+          style={{ position:"absolute", right:14, top:"50%", transform:"translateY(-50%)",
+            background:"none", border:"none", cursor:"pointer", color:"#94a3b8",
+            display:"flex", alignItems:"center", padding:0, transition:"color .15s" }}>
+          {visible ? <FiEyeOff size={15}/> : <FiEye size={15}/>}
+        </button>
+      )}
+    </div>
+    {error && <span style={{ fontSize:"0.71rem", color:"#dc2626", fontWeight:500 }}>{error}</span>}
+  </div>
+);
+
 const Signup = () => {
   const [formData, setFormData] = useState({ name:'', email:'', password:'', confirmPassword:'' });
-  const [errors, setErrors]         = useState({});
-  const [localError, setLocalError] = useState('');
-  const { signup, loading, error }  = useAuth();
+  const [errors, setErrors]           = useState({});
+  const [localError, setLocalError]   = useState('');
+  const [showPassword, setShowPassword]         = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const { signup, loading, error }    = useAuth();
   const navigate  = useNavigate();
   const location  = useLocation();
 
@@ -98,36 +131,13 @@ const Signup = () => {
     { icon:<FiCheck size={15}/>,     text:"Free forever · No credit card needed",    color:"#7c3aed" },
   ];
 
-  /* reusable field */
-  const Field = ({ label, name, type="text", value, placeholder, icon, error }) => (
-    <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-      <label style={{ fontSize:"0.72rem", fontWeight:700, color:"#475569",
-        textTransform:"uppercase", letterSpacing:"0.07em" }}>{label}</label>
-      <div style={{ position:"relative" }}>
-        <span style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)",
-          color:"#94a3b8", pointerEvents:"none", display:"flex" }}>{icon}</span>
-        <input type={type} name={name} value={value} onChange={handleChange}
-          placeholder={placeholder}
-          className={`au-input${error?" err":""}`}
-          style={{ width:"100%", padding:"11px 14px 11px 42px",
-            border:`1.5px solid ${error?"#dc2626":"#e2e8f0"}`, borderRadius:12,
-            background:"#f8fafc", fontFamily:F, fontSize:"0.875rem",
-            color:"#0f172a", transition:"all .15s", boxSizing:"border-box",
-            boxShadow: error ? "0 0 0 4px rgba(254,202,202,.45)" : "none" }}/>
-      </div>
-      {error && <span style={{ fontSize:"0.71rem", color:"#dc2626", fontWeight:500 }}>{error}</span>}
-    </div>
-  );
-
   return (
     <div style={{ minHeight:"100vh", display:"flex", fontFamily:F, background:"#f3f4f8" }}>
 
-      {/* ── LEFT PANEL ── */}
+      {/* LEFT PANEL */}
       <div style={{ flex:"0 0 40%", background:"linear-gradient(145deg,#0f172a 0%,#1e293b 60%,#0f2d5a 100%)",
         display:"flex", flexDirection:"column", justifyContent:"space-between",
         padding:"48px 48px", position:"relative", overflow:"hidden" }}>
-
-        {/* orbs */}
         <div style={{ position:"absolute", top:-80, left:-80, width:300, height:300,
           borderRadius:"50%", background:"radial-gradient(circle,rgba(37,99,235,.2) 0%,transparent 70%)", pointerEvents:"none" }}/>
         <div style={{ position:"absolute", bottom:-40, right:-40, width:240, height:240,
@@ -136,12 +146,8 @@ const Signup = () => {
           borderRadius:"50%", background:"radial-gradient(circle,rgba(124,58,237,.1) 0%,transparent 70%)", pointerEvents:"none",
           animation:"authPulseRing 5s ease-in-out infinite" }}/>
 
-        {/* Logo */}
-        <div className="au-si1">
-          <Logo size={38} showText variant="light"/>
-        </div>
+        <div className="au-si1"><Logo size={38} showText variant="light"/></div>
 
-        {/* Copy */}
         <div style={{ position:"relative", zIndex:1 }}>
           <div className="au-si1" style={{ display:"inline-block", padding:"5px 14px",
             borderRadius:999, background:"rgba(5,150,105,.2)", border:"1px solid rgba(5,150,105,.35)",
@@ -161,8 +167,6 @@ const Signup = () => {
             lineHeight:1.7, margin:"0 0 32px", maxWidth:300 }}>
             Create your free account and start making smarter decisions about your energy and water usage today.
           </p>
-
-          {/* Perks */}
           <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
             {perks.map((p,i) => (
               <div key={i} style={{ display:"flex", alignItems:"center", gap:12 }}>
@@ -170,9 +174,7 @@ const Signup = () => {
                   background:`${p.color}18`, border:`1px solid ${p.color}33`,
                   display:"flex", alignItems:"center", justifyContent:"center",
                   color:p.color, flexShrink:0 }}>{p.icon}</div>
-                <span style={{ fontSize:"0.82rem", color:"rgba(255,255,255,.65)", fontWeight:500 }}>
-                  {p.text}
-                </span>
+                <span style={{ fontSize:"0.82rem", color:"rgba(255,255,255,.65)", fontWeight:500 }}>{p.text}</span>
               </div>
             ))}
           </div>
@@ -183,23 +185,17 @@ const Signup = () => {
         </p>
       </div>
 
-      {/* ── RIGHT PANEL ── */}
+      {/* RIGHT PANEL */}
       <div style={{ flex:1, display:"flex", alignItems:"center", justifyContent:"center",
         padding:"48px 32px", overflowY:"auto" }}>
         <div style={{ width:"100%", maxWidth:420 }}>
 
-          {/* Heading */}
           <div className="au-fu1" style={{ marginBottom:28 }}>
             <h1 style={{ fontSize:"1.65rem", fontWeight:800, color:"#0f172a",
-              margin:"0 0 6px", letterSpacing:"-0.03em" }}>
-              Create your account
-            </h1>
-            <p style={{ fontSize:"0.875rem", color:"#64748b", margin:0 }}>
-              Free forever · Takes 30 seconds
-            </p>
+              margin:"0 0 6px", letterSpacing:"-0.03em" }}>Create your account</h1>
+            <p style={{ fontSize:"0.875rem", color:"#64748b", margin:0 }}>Free forever · Takes 30 seconds</p>
           </div>
 
-          {/* Messages */}
           {location.state?.message && (
             <div className="au-fu2" style={{ padding:"12px 16px", borderRadius:12, marginBottom:18,
               background:"#ecfdf5", border:"1px solid #a7f3d0", color:"#065f46",
@@ -215,29 +211,32 @@ const Signup = () => {
             </div>
           )}
 
-          {/* Form */}
           <form onSubmit={handleSubmit} style={{ display:"flex", flexDirection:"column", gap:15 }}>
             <div className="au-fu2">
               <Field label="Full Name" name="name" value={formData.name}
-                placeholder="John Doe" icon={<FiUser size={15}/>} error={errors.name}/>
+                placeholder="John Doe" icon={<FiUser size={15}/>}
+                error={errors.name} onChange={handleChange}/>
             </div>
             <div className="au-fu3">
               <Field label="Email Address" name="email" type="email" value={formData.email}
-                placeholder="you@example.com" icon={<FiMail size={15}/>} error={errors.email}/>
+                placeholder="you@example.com" icon={<FiMail size={15}/>}
+                error={errors.email} onChange={handleChange}/>
             </div>
             <div className="au-fu4">
-              <Field label="Password" name="password" type="password" value={formData.password}
-                placeholder="Min. 8 characters" icon={<FiLock size={15}/>} error={errors.password}/>
+              <Field label="Password" name="password" value={formData.password}
+                placeholder="Min. 8 characters" icon={<FiLock size={15}/>}
+                error={errors.password} onChange={handleChange}
+                showToggle onToggle={() => setShowPassword(p => !p)} visible={showPassword}/>
             </div>
             <div className="au-fu5">
-              <Field label="Confirm Password" name="confirmPassword" type="password" value={formData.confirmPassword}
-                placeholder="Repeat password" icon={<FiLock size={15}/>} error={errors.confirmPassword}/>
+              <Field label="Confirm Password" name="confirmPassword" value={formData.confirmPassword}
+                placeholder="Repeat password" icon={<FiLock size={15}/>}
+                error={errors.confirmPassword} onChange={handleChange}
+                showToggle onToggle={() => setShowConfirmPassword(p => !p)} visible={showConfirmPassword}/>
             </div>
 
-            {/* Submit */}
             <div className="au-fu6" style={{ paddingTop:4 }}>
-              <button type="submit" disabled={loading}
-                className="au-btn-submit"
+              <button type="submit" disabled={loading} className="au-btn-submit"
                 style={{ width:"100%", padding:"13px 24px", borderRadius:12,
                   border:"none", color:"#fff", fontFamily:F, fontSize:"0.9rem",
                   fontWeight:700, cursor:"pointer", display:"flex",
@@ -248,7 +247,6 @@ const Signup = () => {
             </div>
           </form>
 
-          {/* Divider */}
           <div className="au-fu6" style={{ display:"flex", alignItems:"center", gap:14, margin:"22px 0" }}>
             <div style={{ flex:1, height:1, background:"#e2e8f0" }}/>
             <span style={{ fontSize:"0.7rem", color:"#94a3b8", fontWeight:600 }}>ALREADY HAVE AN ACCOUNT</span>
