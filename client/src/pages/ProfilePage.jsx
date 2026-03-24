@@ -1,13 +1,12 @@
 // src/pages/ProfilePage.jsx
-// ORIGINAL logic 100% preserved — only design tokens updated to match dashboard
 import { useState, useEffect } from "react";
 import {
   FiUser, FiMail, FiEdit2, FiSave, FiX, FiLock,
   FiLogOut, FiMoon, FiSun, FiBell, FiAlertTriangle,
   FiCamera, FiShield, FiCheck,
 } from "react-icons/fi";
+import { useAuth } from "../context/AuthContext";
 
-/* ─── Font (shared with dashboard) ─── */
 if (!document.getElementById("db-font")) {
   const l = document.createElement("link");
   l.id = "db-font"; l.rel = "stylesheet";
@@ -29,7 +28,6 @@ if (!document.getElementById("prof-anim")) {
     .pf-logout:hover        { background:#fef2f2!important; }
     .pf-input:focus { border-color:#2563eb!important; box-shadow:0 0 0 3px rgba(191,219,254,.5)!important; outline:none; }
     .pf-input.error { border-color:#dc2626!important; }
-    /* toggle switch */
     .pf-toggle-input { display:none; }
     .pf-toggle-track {
       display:inline-flex; align-items:center;
@@ -49,7 +47,6 @@ if (!document.getElementById("prof-anim")) {
   document.head.appendChild(s);
 }
 
-/* ════ TOKENS — identical to Dashboard ════ */
 const C = {
   page:"#f3f4f8", card:"#fff", hover:"#f0f2f7",
   ink:"#0f172a", body:"#334155", muted:"#64748b", faint:"#94a3b8",
@@ -66,13 +63,12 @@ const C = {
 };
 const F = "'Plus Jakarta Sans',-apple-system,sans-serif";
 
-/* ════ SHARED BUTTON ════ */
 const Btn = ({ variant="secondary", onClick, children, style={} }) => {
   const variants = {
-    primary:   { bg:C.blue,  color:"#fff",   border:C.blue,  hoverCls:"pf-btn-primary"   },
+    primary:   { bg:C.blue,  color:"#fff",   border:C.blue,    hoverCls:"pf-btn-primary"   },
     secondary: { bg:C.card,  color:C.muted,  border:C.borderB, hoverCls:"pf-btn-secondary" },
     ghost:     { bg:"transparent", color:C.muted, border:"transparent", hoverCls:"pf-btn-ghost" },
-    danger:    { bg:C.red,   color:"#fff",   border:C.red,   hoverCls:"pf-btn-danger"    },
+    danger:    { bg:C.red,   color:"#fff",   border:C.red,     hoverCls:"pf-btn-danger"    },
   };
   const v = variants[variant] || variants.secondary;
   return (
@@ -86,14 +82,48 @@ const Btn = ({ variant="secondary", onClick, children, style={} }) => {
   );
 };
 
-/* ════ MAIN COMPONENT ════ */
-const ProfilePage = () => {
+const Field = ({ label, name, type="text", value, onChange, error, placeholder, icon }) => (
+  <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+    <label style={{ fontSize:"0.72rem", fontWeight:700, textTransform:"uppercase",
+      letterSpacing:"0.07em", color:C.muted, fontFamily:F }}>{label}</label>
+    <div style={{ position:"relative", display:"flex", alignItems:"center" }}>
+      {icon && <span style={{ position:"absolute", left:13, color:C.faint, display:"flex", pointerEvents:"none" }}>
+        {icon}
+      </span>}
+      <input type={type} name={name} value={value} onChange={onChange} placeholder={placeholder}
+        className={`pf-input${error?" error":""}`}
+        style={{ width:"100%", padding: icon ? "10px 14px 10px 38px" : "10px 14px",
+          border:`1.5px solid ${error?C.red:C.border}`, borderRadius:10,
+          background:C.hover, fontFamily:F, fontSize:"0.875rem", color:C.body,
+          transition:"border-color .15s, box-shadow .15s",
+          boxShadow: error ? `0 0 0 3px ${C.redM}55` : "none" }}/>
+    </div>
+    {error && <span style={{ fontSize:"0.72rem", color:C.red, fontFamily:F }}>{error}</span>}
+  </div>
+);
 
-  /* ── ORIGINAL STATE (unchanged) ── */
+const ProfilePage = () => {
+  // ── Pull real user from AuthContext ──
+  const { user: authUser, logout } = useAuth();
+
   const [profileData, setProfileData] = useState({
-    fullName:"John Doe", email:"john.doe@example.com",
-    role:"Account Owner", avatar:null,
+    fullName: authUser?.name  || "",
+    email:    authUser?.email || "",
+    role:     "Account Owner",
+    avatar:   null,
   });
+
+  // Keep profileData in sync if authUser loads after mount
+  useEffect(() => {
+    if (authUser) {
+      setProfileData(prev => ({
+        ...prev,
+        fullName: authUser.name  || prev.fullName,
+        email:    authUser.email || prev.email,
+      }));
+    }
+  }, [authUser]);
+
   const [isEditingProfile,  setIsEditingProfile]  = useState(false);
   const [formData,          setFormData]          = useState({ ...profileData });
   const [settings,          setSettings]          = useState({ darkMode:false, emailNotifications:true, usageAlerts:true });
@@ -103,11 +133,9 @@ const ProfilePage = () => {
   const [notification,      setNotification]      = useState({ message:"", type:"" });
   const [activeTab,         setActiveTab]         = useState("profile");
 
-  /* ── ORIGINAL EFFECTS (unchanged) ── */
   useEffect(() => { document.body.classList.toggle("dark-mode", settings.darkMode); }, [settings.darkMode]);
   useEffect(() => { setFormData({ ...profileData }); }, [profileData]);
 
-  /* ── ORIGINAL HANDLERS (unchanged) ── */
   const showNotification = (message, type="success") => {
     setNotification({ message, type });
     setTimeout(() => setNotification({ message:"", type:"" }), 3000);
@@ -154,44 +182,22 @@ const ProfilePage = () => {
       showNotification("Password changed successfully!");
     }
   };
-  const handleLogout      = () => console.log("Logout");
-  const handleCancelEdit  = () => { setFormData({ ...profileData }); setErrors({}); setIsEditingProfile(false); };
-  const initials = profileData.fullName.split(" ").map(n => n[0]).join("").toUpperCase();
+  const handleLogout     = () => logout();
+  const handleCancelEdit = () => { setFormData({ ...profileData }); setErrors({}); setIsEditingProfile(false); };
+  const initials = profileData.fullName
+    ? profileData.fullName.split(" ").map(n => n[0]).join("").toUpperCase()
+    : "?";
 
-  /* ── SHARED FIELD ── */
-  const Field = ({ label, name, type="text", value, onChange, error, placeholder, icon }) => (
-    <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-      <label style={{ fontSize:"0.72rem", fontWeight:700, textTransform:"uppercase",
-        letterSpacing:"0.07em", color:C.muted, fontFamily:F }}>{label}</label>
-      <div style={{ position:"relative", display:"flex", alignItems:"center" }}>
-        {icon && <span style={{ position:"absolute", left:13, color:C.faint, display:"flex", pointerEvents:"none" }}>
-          {icon}
-        </span>}
-        <input type={type} name={name} value={value} onChange={onChange} placeholder={placeholder}
-          className={`pf-input${error?" error":""}`}
-          style={{ width:"100%", padding: icon ? "10px 14px 10px 38px" : "10px 14px",
-            border:`1.5px solid ${error?C.red:C.border}`, borderRadius:10,
-            background:C.hover, fontFamily:F, fontSize:"0.875rem", color:C.body,
-            transition:"border-color .15s, box-shadow .15s",
-            boxShadow: error ? `0 0 0 3px ${C.redM}55` : "none" }}/>
-      </div>
-      {error && <span style={{ fontSize:"0.72rem", color:C.red, fontFamily:F }}>{error}</span>}
-    </div>
-  );
-
-  /* ── ICON WRAP ── */
   const IconWrap = ({ color, bg, bdr, children }) => (
     <div style={{ width:38, height:38, borderRadius:10, display:"flex", alignItems:"center",
       justifyContent:"center", background:bg, border:`1px solid ${bdr}`,
       color, flexShrink:0 }}>{children}</div>
   );
 
-  /* ════ RENDER ════ */
   return (
     <div style={{ minHeight:"100vh", background:C.page, fontFamily:F,
       color:C.ink, padding:"28px 32px 64px" }}>
 
-      {/* Toast */}
       {notification.message && (
         <div style={{ position:"fixed", top:24, right:24, zIndex:9999,
           display:"flex", alignItems:"center", gap:10,
@@ -208,7 +214,6 @@ const ProfilePage = () => {
         </div>
       )}
 
-      {/* ── PAGE HEADER ── */}
       <div className="pf-fu" style={{ marginBottom:24 }}>
         <h1 style={{ fontSize:"1.75rem", fontWeight:800, color:C.ink,
           margin:"0 0 5px", letterSpacing:"-0.03em" }}>Account Settings</h1>
@@ -217,14 +222,11 @@ const ProfilePage = () => {
         </p>
       </div>
 
-      {/* ── LAYOUT — sidebar + main ── */}
       <div style={{ display:"grid", gridTemplateColumns:"260px 1fr", gap:20, alignItems:"start" }}>
 
-        {/* ── SIDEBAR ── */}
+        {/* SIDEBAR */}
         <aside style={{ background:C.card, border:`1px solid ${C.border}`,
           borderRadius:16, overflow:"hidden", boxShadow:C.s1, position:"sticky", top:24 }}>
-
-          {/* Avatar */}
           <div style={{ padding:"24px 20px 20px", borderBottom:`1px solid ${C.border}`,
             display:"flex", flexDirection:"column", alignItems:"center", gap:10, textAlign:"center" }}>
             <div style={{ position:"relative", display:"inline-block" }}>
@@ -253,7 +255,6 @@ const ProfilePage = () => {
             </div>
           </div>
 
-          {/* Nav */}
           <nav style={{ padding:"12px 10px" }}>
             {[
               { id:"profile",     icon:<FiUser size={16}/>,   label:"Profile"     },
@@ -274,7 +275,6 @@ const ProfilePage = () => {
             ))}
           </nav>
 
-          {/* Sign Out */}
           <div style={{ padding:"10px 10px 14px", borderTop:`1px solid ${C.border}` }}>
             <button className="pf-logout" onClick={handleLogout}
               style={{ display:"flex", alignItems:"center", gap:10, width:"100%",
@@ -286,17 +286,12 @@ const ProfilePage = () => {
           </div>
         </aside>
 
-        {/* ── MAIN CONTENT ── */}
+        {/* MAIN CONTENT */}
         <main>
-
-          {/* PROFILE TAB */}
           {activeTab === "profile" && (
             <div className="pf-fu" style={{ display:"flex", flexDirection:"column", gap:16 }}>
               <div className="pf-card" style={{ background:C.card, border:`1px solid ${C.border}`,
-                borderRadius:16, overflow:"hidden", boxShadow:C.s1,
-                transition:"box-shadow .2s" }}>
-
-                {/* Card header */}
+                borderRadius:16, overflow:"hidden", boxShadow:C.s1, transition:"box-shadow .2s" }}>
                 <div style={{ padding:"20px 24px", borderBottom:`1px solid ${C.border}`,
                   display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
                   <div>
@@ -309,7 +304,6 @@ const ProfilePage = () => {
                     </Btn>
                   )}
                 </div>
-
                 <div style={{ padding:"24px" }}>
                   {isEditingProfile ? (
                     <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
@@ -329,9 +323,9 @@ const ProfilePage = () => {
                   ) : (
                     <div style={{ display:"flex", flexDirection:"column" }}>
                       {[
-                        { label:"Full Name",      value:profileData.fullName  },
-                        { label:"Email Address",  value:profileData.email     },
-                        { label:"Account Role",   value:null, role:profileData.role },
+                        { label:"Full Name",     value:profileData.fullName },
+                        { label:"Email Address", value:profileData.email    },
+                        { label:"Account Role",  value:null, role:profileData.role },
                       ].map((row,i,arr) => (
                         <div key={i} style={{ display:"flex", alignItems:"center",
                           padding:"16px 0", borderBottom: i<arr.length-1?`1px solid ${C.border}`:"none" }}>
@@ -357,7 +351,6 @@ const ProfilePage = () => {
             </div>
           )}
 
-          {/* PREFERENCES TAB */}
           {activeTab === "preferences" && (
             <div className="pf-fu">
               <div className="pf-card" style={{ background:C.card, border:`1px solid ${C.border}`,
@@ -368,36 +361,25 @@ const ProfilePage = () => {
                 </div>
                 <div style={{ padding:"8px 0" }}>
                   {[
-                    {
-                      key:"darkMode", label:"Dark Mode", desc:"Switch between light and dark interface",
+                    { key:"darkMode", label:"Dark Mode", desc:"Switch between light and dark interface",
                       icon: settings.darkMode ? <FiMoon size={16}/> : <FiSun size={16}/>,
-                      accent:C.blue, bg:C.blueL, bdr:C.blueM,
-                    },
-                    {
-                      key:"emailNotifications", label:"Email Notifications", desc:"Receive bill reminders and usage alerts via email",
-                      icon:<FiBell size={16}/>, accent:C.green, bg:C.greenL, bdr:C.greenM,
-                    },
-                    {
-                      key:"usageAlerts", label:"Usage Alerts", desc:"Get notified about unusual consumption patterns",
-                      icon:<FiAlertTriangle size={16}/>, accent:C.amber, bg:C.amberL, bdr:C.amberM,
-                    },
+                      accent:C.blue, bg:C.blueL, bdr:C.blueM },
+                    { key:"emailNotifications", label:"Email Notifications", desc:"Receive bill reminders and usage alerts via email",
+                      icon:<FiBell size={16}/>, accent:C.green, bg:C.greenL, bdr:C.greenM },
+                    { key:"usageAlerts", label:"Usage Alerts", desc:"Get notified about unusual consumption patterns",
+                      icon:<FiAlertTriangle size={16}/>, accent:C.amber, bg:C.amberL, bdr:C.amberM },
                   ].map((s,i,arr) => (
                     <div key={s.key} style={{ display:"flex", alignItems:"center", gap:14,
-                      padding:"18px 24px",
-                      borderBottom: i<arr.length-1 ? `1px solid ${C.border}` : "none" }}>
+                      padding:"18px 24px", borderBottom: i<arr.length-1 ? `1px solid ${C.border}` : "none" }}>
                       <IconWrap color={s.accent} bg={s.bg} bdr={s.bdr}>{s.icon}</IconWrap>
                       <div style={{ flex:1 }}>
                         <h4 style={{ fontSize:"0.875rem", fontWeight:600, color:C.ink, margin:"0 0 2px" }}>{s.label}</h4>
                         <p style={{ fontSize:"0.78rem", color:C.muted, margin:0 }}>{s.desc}</p>
                       </div>
-                      {/* Toggle */}
                       <label style={{ cursor:"pointer", flexShrink:0 }}>
                         <input type="checkbox" className="pf-toggle-input"
-                          checked={settings[s.key]}
-                          onChange={() => handleSettingChange(s.key)}/>
-                        <span className="pf-toggle-track">
-                          <span className="pf-toggle-thumb"/>
-                        </span>
+                          checked={settings[s.key]} onChange={() => handleSettingChange(s.key)}/>
+                        <span className="pf-toggle-track"><span className="pf-toggle-thumb"/></span>
                       </label>
                     </div>
                   ))}
@@ -406,11 +388,8 @@ const ProfilePage = () => {
             </div>
           )}
 
-          {/* SECURITY TAB */}
           {activeTab === "security" && (
             <div className="pf-fu" style={{ display:"flex", flexDirection:"column", gap:16 }}>
-
-              {/* Password card */}
               <div className="pf-card" style={{ background:C.card, border:`1px solid ${C.border}`,
                 borderRadius:16, overflow:"hidden", boxShadow:C.s1, transition:"box-shadow .2s" }}>
                 <div style={{ padding:"20px 24px", borderBottom:`1px solid ${C.border}` }}>
@@ -425,43 +404,34 @@ const ProfilePage = () => {
                         <h4 style={{ fontSize:"0.875rem", fontWeight:600, color:C.ink, margin:"0 0 2px" }}>Password</h4>
                         <p style={{ fontSize:"0.78rem", color:C.muted, margin:0 }}>Last changed 3 months ago</p>
                       </div>
-                      <Btn variant="secondary" onClick={() => setShowPasswordForm(true)}>
-                        Change Password
-                      </Btn>
+                      <Btn variant="secondary" onClick={() => setShowPasswordForm(true)}>Change Password</Btn>
                     </div>
                   ) : (
                     <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
                       <Field label="Current Password" name="currentPassword" type="password"
                         value={passwordData.currentPassword} onChange={handlePasswordChange}
-                        error={errors.currentPassword} placeholder="Enter current password"
-                        icon={<FiLock size={14}/>}/>
+                        error={errors.currentPassword} placeholder="Enter current password" icon={<FiLock size={14}/>}/>
                       <Field label="New Password" name="newPassword" type="password"
                         value={passwordData.newPassword} onChange={handlePasswordChange}
-                        error={errors.newPassword} placeholder="Min. 8 characters"
-                        icon={<FiLock size={14}/>}/>
+                        error={errors.newPassword} placeholder="Min. 8 characters" icon={<FiLock size={14}/>}/>
                       <Field label="Confirm New Password" name="confirmPassword" type="password"
                         value={passwordData.confirmPassword} onChange={handlePasswordChange}
-                        error={errors.confirmPassword} placeholder="Repeat new password"
-                        icon={<FiLock size={14}/>}/>
+                        error={errors.confirmPassword} placeholder="Repeat new password" icon={<FiLock size={14}/>}/>
                       <div style={{ display:"flex", gap:10, paddingTop:4 }}>
                         <Btn variant="primary" onClick={handleChangePassword}>
                           <FiShield size={13}/> Update Password
                         </Btn>
-                        <Btn variant="ghost" onClick={() => { setShowPasswordForm(false); setErrors({}); }}>
-                          Cancel
-                        </Btn>
+                        <Btn variant="ghost" onClick={() => { setShowPasswordForm(false); setErrors({}); }}>Cancel</Btn>
                       </div>
                     </div>
                   )}
                 </div>
               </div>
 
-              {/* Danger Zone */}
               <div className="pf-card" style={{ background:C.card,
                 border:`1px solid ${C.redM}`, borderRadius:16, overflow:"hidden",
                 boxShadow:C.s1, transition:"box-shadow .2s" }}>
-                <div style={{ padding:"20px 24px", borderBottom:`1px solid ${C.redM}`,
-                  background:C.redL }}>
+                <div style={{ padding:"20px 24px", borderBottom:`1px solid ${C.redM}`, background:C.redL }}>
                   <h2 style={{ fontSize:"1rem", fontWeight:700, color:C.red, margin:"0 0 3px" }}>Danger Zone</h2>
                   <p style={{ fontSize:"0.78rem", color:C.muted, margin:0 }}>Irreversible account actions</p>
                 </div>
@@ -476,7 +446,6 @@ const ProfilePage = () => {
                   </div>
                 </div>
               </div>
-
             </div>
           )}
         </main>
