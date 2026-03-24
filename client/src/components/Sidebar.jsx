@@ -2,19 +2,9 @@
 import React, { useState, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard,
-  Receipt,
-  BarChart3,
-  LineChart,
-  Wallet,
-  FileText,
-  Settings,
-  LogOut,
-  Moon,
-  Sun,
-  PanelLeftClose,
-  PanelLeftOpen,
-  ChevronRight,
+  LayoutDashboard, Receipt, BarChart3, LineChart,
+  Wallet, FileText, Settings, LogOut, Moon, Sun,
+  PanelLeftClose, PanelLeftOpen, ChevronRight,
 } from "lucide-react";
 import Logo from "./Logo";
 import "./Sidebar.css";
@@ -32,7 +22,6 @@ const systemItems = [
   { icon: Settings, label: "Settings", path: "/profile" },
 ];
 
-// ── Nav Item ──────────────────────────────────────────────────────
 const NavItem = ({ item, isActive, isCollapsed }) => {
   const Icon = item.icon;
   return (
@@ -45,28 +34,18 @@ const NavItem = ({ item, isActive, isCollapsed }) => {
       <span className={`nav-icon${isActive ? " nav-icon--active" : ""}`}>
         <Icon size={19} strokeWidth={isActive ? 2.2 : 1.8} />
       </span>
-
       {!isCollapsed && (
         <>
           <span className="nav-label">{item.label}</span>
           {isActive && <ChevronRight size={14} className="nav-chevron" />}
         </>
       )}
-
       {isActive && <span className="nav-active-bar" aria-hidden="true" />}
     </Link>
   );
 };
 
-// ── Sidebar ───────────────────────────────────────────────────────
-const Sidebar = ({
-  isOpen,
-  setIsOpen,
-  darkMode,
-  onToggleDarkMode,
-  user,
-  onLogout,
-}) => {
+const Sidebar = ({ isOpen, setIsOpen, darkMode, onToggleDarkMode, user, onLogout }) => {
   const [collapsed, setCollapsed] = useState(false);
   const [isMobile, setIsMobile]   = useState(window.innerWidth < 1024);
   const location = useLocation();
@@ -89,27 +68,25 @@ const Sidebar = ({
     isMobile && !isOpen ? "sidebar--hidden"    : "",
   ].filter(Boolean).join(" ");
 
-  const displayUser = user ?? { initials: "SA", name: "Saduni", location: "Colombo" };
+  // ── Derive initials from the real user name ──
+  const displayName = user?.name || "";
+  const initials = displayName
+    ? displayName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
+    : "?";
 
   return (
     <>
       {isMobile && isOpen && (
-        <div
-          className="sidebar-overlay"
-          onClick={() => setIsOpen(false)}
-          aria-hidden="true"
-        />
+        <div className="sidebar-overlay" onClick={() => setIsOpen(false)} aria-hidden="true" />
       )}
 
       <aside className={cls} aria-label="Main navigation">
 
-        {/* ── Header: logo disappears when collapsed ──────── */}
         <div
           className="sidebar-header"
           onClick={() => isCollapsed && setCollapsed(false)}
           style={{ cursor: isCollapsed ? "pointer" : "default" }}
         >
-          {/* Logo fades + collapses via CSS when sidebar collapses */}
           <div className="sidebar-logo">
             <Logo size={36} showText={true} variant="light" />
           </div>
@@ -120,35 +97,23 @@ const Sidebar = ({
               onClick={(e) => { e.stopPropagation(); setCollapsed(p => !p); }}
               aria-label={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             >
-              {isCollapsed
-                ? <PanelLeftOpen  size={17} />
-                : <PanelLeftClose size={17} />
-              }
+              {isCollapsed ? <PanelLeftOpen size={17}/> : <PanelLeftClose size={17}/>}
             </button>
           )}
 
           {isMobile && isOpen && (
-            <button
-              className="collapse-btn"
-              onClick={() => setIsOpen(false)}
-              aria-label="Close sidebar"
-            >
+            <button className="collapse-btn" onClick={() => setIsOpen(false)} aria-label="Close sidebar">
               <PanelLeftClose size={17} />
             </button>
           )}
         </div>
 
-        {/* ── Nav area ────────────────────────────────────── */}
         <div className="sidebar-nav-area">
           {!isCollapsed && <p className="nav-section-label">Menu</p>}
           <nav className="nav-group" aria-label="Dashboard navigation">
             {mainItems.map((item) => (
-              <NavItem
-                key={item.label}
-                item={item}
-                isActive={location.pathname === item.path}
-                isCollapsed={isCollapsed}
-              />
+              <NavItem key={item.label} item={item}
+                isActive={location.pathname === item.path} isCollapsed={isCollapsed}/>
             ))}
           </nav>
 
@@ -157,25 +122,17 @@ const Sidebar = ({
           {!isCollapsed && <p className="nav-section-label">System</p>}
           <nav className="nav-group" aria-label="System navigation">
             {systemItems.map((item) => (
-              <NavItem
-                key={item.label}
-                item={item}
-                isActive={location.pathname === item.path}
-                isCollapsed={isCollapsed}
-              />
+              <NavItem key={item.label} item={item}
+                isActive={location.pathname === item.path} isCollapsed={isCollapsed}/>
             ))}
           </nav>
         </div>
 
-        {/* ── Footer ──────────────────────────────────────── */}
         <div className="sidebar-footer">
           {!isCollapsed && (
             <div className="dark-mode-row">
               <div className="dark-mode-label">
-                {darkMode
-                  ? <Moon size={15} strokeWidth={1.8} />
-                  : <Sun  size={15} strokeWidth={1.8} />
-                }
+                {darkMode ? <Moon size={15} strokeWidth={1.8}/> : <Sun size={15} strokeWidth={1.8}/>}
                 <span>{darkMode ? "Dark mode" : "Light mode"}</span>
               </div>
               <button
@@ -190,22 +147,22 @@ const Sidebar = ({
           )}
 
           <div className="user-row">
-            <div className="user-avatar">{displayUser.initials}</div>
+            <div className="user-avatar">{initials}</div>
 
             {!isCollapsed && (
               <>
                 <div className="user-info">
-                  <span className="user-name">{displayUser.name}</span>
-                  <span className="user-meta">{displayUser.location}</span>
+                  <span className="user-name">{displayName || "Guest"}</span>
+                  <span className="user-meta">{user?.email || ""}</span>
                 </div>
-                {/* Logout — always visible, red tinted */}
                 <button
                   className="logout-btn"
                   onClick={onLogout}
                   aria-label="Log out"
                   title="Log out"
                 >
-                  <LogOut size={15} strokeWidth={2.2} color="#f87171" stroke="#f87171" style={{display:"block",flexShrink:0}} />
+                  <LogOut size={15} strokeWidth={2.2} color="#f87171" stroke="#f87171"
+                    style={{ display:"block", flexShrink:0 }}/>
                 </button>
               </>
             )}
