@@ -1,5 +1,6 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from './context/AuthContext';
+import { useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
 // ── User pages
@@ -27,22 +28,42 @@ import AdminProtectedRoute from './components/AdminProtectedRoute';
 
 import './styles/theme.css';
 
+// ── Smart root redirect based on role ──
+// No token      → /login
+// role: admin   → /admin
+// role: user    → /dashboard
+const RootRedirect = () => {
+  const { isAuthenticated, user, loading } = useAuth();
+
+  if (loading) {
+    return <div style={{ textAlign: 'center', marginTop: '50px' }}>Loading...</div>;
+  }
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (user?.role === 'admin') {
+    return <Navigate to="/admin" replace />;
+  }
+
+  return <Navigate to="/dashboard" replace />;
+};
+
 function App() {
   return (
     <AuthProvider>
       <Router>
         <Routes>
 
+          {/* ── Root: smart redirect based on role ── */}
+          <Route path="/" element={<RootRedirect />} />
+
           {/* ── Public routes ── */}
           <Route path="/login"  element={<Login />} />
           <Route path="/signup" element={<Signup />} />
 
           {/* ── User protected routes ── */}
-          <Route path="/" element={
-            <ProtectedRoute>
-              <MainLayout><Dashboard /></MainLayout>
-            </ProtectedRoute>
-          } />
           <Route path="/dashboard" element={
             <ProtectedRoute>
               <MainLayout><Dashboard /></MainLayout>
@@ -80,21 +101,21 @@ function App() {
           } />
 
           {/* ── Admin protected routes ── */}
-<Route path="/admin" element={
-  <AdminProtectedRoute>
-    <AdminLayout><AdminDashboard /></AdminLayout>
-  </AdminProtectedRoute>
-} />
-<Route path="/admin/tariff" element={
-  <AdminProtectedRoute>
-    <AdminLayout><TariffManagement /></AdminLayout>
-  </AdminProtectedRoute>
-} />
-<Route path="/admin/users" element={
-  <AdminProtectedRoute>
-    <AdminLayout><UserManagement /></AdminLayout>
-  </AdminProtectedRoute>
-} />
+          <Route path="/admin" element={
+            <AdminProtectedRoute>
+              <AdminLayout><AdminDashboard /></AdminLayout>
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin/tariff" element={
+            <AdminProtectedRoute>
+              <AdminLayout><TariffManagement /></AdminLayout>
+            </AdminProtectedRoute>
+          } />
+          <Route path="/admin/users" element={
+            <AdminProtectedRoute>
+              <AdminLayout><UserManagement /></AdminLayout>
+            </AdminProtectedRoute>
+          } />
 
         </Routes>
       </Router>

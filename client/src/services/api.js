@@ -14,7 +14,7 @@ const api = axios.create({
 
 // Auto-attach JWT token to every request
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("authToken");
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -24,8 +24,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("userData");
       window.location.href = "/login";
     }
     return Promise.reject(error);
@@ -92,8 +92,8 @@ export const billsAPI = {
   // GET /api/bills?utilityType=Electricity
   // GET /api/bills?utilityType=Water
   // GET /api/bills?month=November 2025
-  getFiltered: (params) =>
-    api.get("/bills", { params }),
+  getFiltered: (config) =>
+    api.get("/bills", config),
 };
 
 
@@ -108,8 +108,8 @@ export const tariffAPI = {
   // GET /api/tariff/active
   // returns current active tariff
   // { _id, utilityType, tiers, fixedCharge, effectiveFrom, effectiveTo }
-  getActive: () =>
-    api.get("/tariff/active"),
+  getActive: (config) =>
+    api.get("/tariff/active", config),
 
   // GET /api/tariff/history
   // returns all tariffs sorted by effectiveFrom desc
@@ -294,4 +294,3 @@ export const adminAPI = {
 //  TariffManagement→ tariffAPI.getActive(),
 //                    tariffAPI.getHistory(),
 //                    tariffAPI.create()
-//
