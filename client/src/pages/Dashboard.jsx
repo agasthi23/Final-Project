@@ -12,6 +12,7 @@ import {
   FiAlertTriangle, FiCheckCircle, FiArrowUp, FiArrowDown,
   FiActivity, FiBarChart2, FiChevronRight, FiInfo,
 } from "react-icons/fi";
+import { useTheme } from "../context/ThemeContext";
 
 (() => {
   if (!document.getElementById("db-font")) {
@@ -37,20 +38,6 @@ import {
   }
 })();
 
-const C = {
-  page:"#f3f4f8", card:"#fff", hover:"#f0f2f7",
-  ink:"#0f172a", body:"#334155", muted:"#64748b", faint:"#94a3b8",
-  border:"#e2e8f0", borderB:"#cbd5e1",
-  blue:"#2563eb", blueD:"#1d4ed8", blueL:"#eff6ff", blueM:"#bfdbfe",
-  teal:"#0891b2", tealL:"#ecfeff", tealM:"#a5f3fc",
-  green:"#059669", greenL:"#ecfdf5", greenM:"#a7f3d0",
-  amber:"#d97706", amberL:"#fffbeb", amberM:"#fde68a",
-  red:"#dc2626", redL:"#fef2f2", redM:"#fecaca",
-  violet:"#7c3aed", violetL:"#f5f3ff", violetM:"#ddd6fe",
-  s1:"0 1px 3px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04)",
-  s2:"0 4px 16px rgba(15,23,42,.08),0 2px 4px rgba(15,23,42,.04)",
-  s3:"0 12px 40px rgba(15,23,42,.10),0 4px 8px rgba(15,23,42,.04)",
-};
 const F = "'Plus Jakarta Sans',-apple-system,sans-serif";
 
 const TREND = [
@@ -67,79 +54,123 @@ CURRENT.budgetPct = Math.round((CURRENT.total/CURRENT.budget)*100);
 const PRED = { water:28, elec:145, waterBill:2360, elecBill:5240, fixedFees:850, costChange:3,
   waterUnitsChange:10, elecUnitsChange:-5, waterBillChange:12, elecBillChange:4 };
 PRED.total = PRED.waterBill + PRED.elecBill + PRED.fixedFees;
-const PIE = [
-  { name:"Electricity", value:62, color:C.blue },
-  { name:"Water",       value:28, color:C.teal },
-  { name:"Fixed Fees",  value:10, color:C.violet },
-];
-const COST_CMP = TREND.slice(2).map(d => ({ m:d.m, cost:d.total }));
-
-const Badge = ({ val }) => {
-  const up = val >= 0;
-  return (
-    <span style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"2px 7px", borderRadius:20,
-      fontSize:"0.68rem", fontWeight:700,
-      background:up?C.greenL:C.redL, border:`1px solid ${up?C.greenM:C.redM}`, color:up?C.green:C.red }}>
-      {up ? <FiArrowUp size={10}/> : <FiArrowDown size={10}/>}
-      {Math.abs(val)}%
-    </span>
-  );
-};
-
-const Label = ({ children, mb=14 }) => (
-  <p style={{ fontSize:"0.63rem", fontWeight:800, letterSpacing:"0.15em", textTransform:"uppercase",
-    color:C.faint, margin:`0 0 ${mb}px` }}>{children}</p>
-);
-
-const Card = ({ children, style={}, cls="" }) => (
-  <div className={`fu db-hover ${cls}`} style={{ background:C.card, borderRadius:16,
-    border:`1px solid ${C.border}`, boxShadow:C.s1, overflow:"hidden",
-    transition:"transform .22s ease, box-shadow .22s ease", ...style }}>
-    {children}
-  </div>
-);
-
-const ChartCard = ({ title, sub, children, action, style={} }) => (
-  <Card style={style}>
-    <div style={{ padding:"20px 24px 0", display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
-      <div>
-        <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 2px" }}>{title}</h3>
-        {sub && <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{sub}</p>}
-      </div>
-      {action}
-    </div>
-    <div style={{ padding:"12px 8px 18px" }}>{children}</div>
-  </Card>
-);
-
-const Tip = ({ active, payload, label, prefix="" }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10,
-      padding:"10px 14px", boxShadow:C.s3, fontFamily:F, minWidth:145 }}>
-      <p style={{ fontSize:"0.7rem", fontWeight:700, color:C.muted, margin:"0 0 8px",
-        textTransform:"uppercase", letterSpacing:"0.08em" }}>{label}</p>
-      {payload.map((p,i) => (
-        <div key={i} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:i<payload.length-1?5:0 }}>
-          <span style={{ width:8, height:8, borderRadius:2, background:p.color, display:"inline-block" }}/>
-          <span style={{ fontSize:"0.75rem", color:C.muted, flex:1 }}>{p.name}</span>
-          <span style={{ fontSize:"0.8125rem", fontWeight:700, color:C.ink }}>{prefix}{p.value.toLocaleString()}</span>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-const ax = { fill:C.faint, fontSize:11, fontFamily:F };
 
 export default function Dashboard() {
   // ── Pull real user from AuthContext ──
   const { user: authUser } = useAuth();
+  const { darkMode } = useTheme();
   const [activeTab, setActiveTab] = useState("Monthly");
 
-  const now = new Date();
-  const monthName = now.toLocaleString("default", { month:"long" });
-  const displayName = authUser?.name || "";
+  const C = {
+    page:   darkMode ? "#0f172a" : "#f3f4f8",
+    card:   darkMode ? "#1e293b" : "#ffffff",
+    hover:  darkMode ? "#334155" : "#f0f2f7",
+
+    ink:    darkMode ? "#f1f5f9" : "#0f172a",
+    body:   darkMode ? "#cbd5e1" : "#334155",
+    muted:  darkMode ? "#94a3b8" : "#64748b",
+    faint:  darkMode ? "#64748b" : "#94a3b8",
+
+    border: darkMode ? "#334155" : "#e2e8f0",
+    borderB:darkMode ? "#475569" : "#cbd5e1",
+
+    blue:"#2563eb",
+    blueD:"#1d4ed8",
+    blueL: darkMode ? "rgba(37,99,235,0.15)" : "#eff6ff",
+    blueM: darkMode ? "#1e3a8a" : "#bfdbfe",
+
+    teal:"#0891b2",
+    tealL: darkMode ? "rgba(8,145,178,0.15)" : "#ecfeff",
+    tealM: darkMode ? "#164e63" : "#a5f3fc",
+
+    green:"#059669",
+    greenL: darkMode ? "rgba(5,150,105,0.15)" : "#ecfdf5",
+    greenM: darkMode ? "#064e3b" : "#a7f3d0",
+
+    amber:"#d97706",
+    amberL: darkMode ? "rgba(217,119,6,0.15)" : "#fffbeb",
+    amberM: darkMode ? "#78350f" : "#fde68a",
+
+    red:"#dc2626",
+    redL: darkMode ? "rgba(220,38,38,0.15)" : "#fef2f2",
+    redM: darkMode ? "#7f1d1d" : "#fecaca",
+
+    violet:"#7c3aed",
+    violetL: darkMode ? "rgba(124,58,237,0.15)" : "#f5f3ff",
+    violetM: darkMode ? "#4c1d95" : "#ddd6fe",
+
+    s1:"0 1px 3px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04)",
+    s2:"0 4px 16px rgba(15,23,42,.08),0 2px 4px rgba(15,23,42,.04)",
+    s3:"0 12px 40px rgba(15,23,42,.10),0 4px 8px rgba(15,23,42,.04)",
+  };
+
+  const PIE = [
+    { name:"Electricity", value:62, color:C.blue },
+    { name:"Water",       value:28, color:C.teal },
+    { name:"Fixed Fees",  value:10, color:C.violet },
+  ];
+
+  const Badge = ({ val }) => {
+    const up = val >= 0;
+    return (
+      <span style={{ display:"inline-flex", alignItems:"center", gap:3, padding:"2px 7px", borderRadius:20,
+        fontSize:"0.68rem", fontWeight:700,
+        background:up?C.greenL:C.redL, border:`1px solid ${up?C.greenM:C.redM}`, color:up?C.green:C.red }}>
+        {up ? <FiArrowUp size={10}/> : <FiArrowDown size={10}/>}
+        {Math.abs(val)}%
+      </span>
+    );
+  };
+
+  const Label = ({ children, mb=14 }) => (
+    <p style={{ fontSize:"0.63rem", fontWeight:800, letterSpacing:"0.15em", textTransform:"uppercase",
+      color:C.faint, margin:`0 0 ${mb}px` }}>{children}</p>
+  );
+
+  const Card = ({ children, style={}, cls="" }) => (
+    <div className={`fu db-hover ${cls}`} style={{ background:C.card, borderRadius:16,
+      border:`1px solid ${C.border}`, boxShadow:C.s1, overflow:"hidden",
+      transition:"transform .22s ease, box-shadow .22s ease", ...style }}>
+      {children}
+    </div>
+  );
+
+  const ChartCard = ({ title, sub, children, action, style={} }) => (
+    <Card style={style}>
+      <div style={{ padding:"20px 24px 0", display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+        <div>
+          <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 2px" }}>{title}</h3>
+          {sub && <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{sub}</p>}
+        </div>
+        {action}
+      </div>
+      <div style={{ padding:"12px 8px 18px" }}>{children}</div>
+    </Card>
+  );
+
+  const Tip = ({ active, payload, label, prefix="" }) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10,
+        padding:"10px 14px", boxShadow:C.s3, fontFamily:F, minWidth:145 }}>
+        <p style={{ fontSize:"0.7rem", fontWeight:700, color:C.muted, margin:"0 0 8px",
+          textTransform:"uppercase", letterSpacing:"0.08em" }}>{label}</p>
+        {payload.map((p,i) => (
+          <div key={i} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:i<payload.length-1?5:0 }}>
+            <span style={{ width:8, height:8, borderRadius:2, background:p.color, display:"inline-block" }}/>
+            <span style={{ fontSize:"0.75rem", color:C.muted, flex:1 }}>{p.name}</span>
+            <span style={{ fontSize:"0.8125rem", fontWeight:700, color:C.ink }}>{prefix}{p.value.toLocaleString()}</span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const ax = { fill:C.faint, fontSize:11, fontFamily:F };
+
+  const monthName = new Date().toLocaleString('default', { month: 'long' });
+  const displayName = authUser?.name || authUser?.username || 'User';
+  const COST_CMP = TREND.map(t => ({ m: t.m, cost: t.total }));
 
   const overBudget = CURRENT.budgetPct >= 100;
   const nearBudget = CURRENT.budgetPct >= 85 && !overBudget;
@@ -371,7 +402,11 @@ export default function Dashboard() {
                       </td>
                     </tr>
                   ))}
-                  <tr style={{ background:"linear-gradient(90deg,#f0f7ff,#fafbff)" }}>
+                  <tr style={{
+                    background:"rgba(37, 99, 235, 0.08)",
+                    borderTop:`1px solid ${C.blue}30`,
+                    borderBottom:`1px solid ${C.blue}30`
+                  }}>
                     <td style={{ padding:"16px 20px" }}>
                       <span style={{ fontSize:"0.875rem", fontWeight:800, color:C.ink }}>Total Estimated Bill</span>
                     </td>
@@ -440,7 +475,7 @@ export default function Dashboard() {
                     <stop offset="95%" stopColor={C.blue} stopOpacity={0}/>
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="4 4" stroke="#e8eaf0" vertical={false}/>
+                <CartesianGrid strokeDasharray="4 4" stroke={darkMode ? "#334155" : "#e8eaf0"} vertical={false}/>
                 <XAxis dataKey="m" tick={ax} axisLine={false} tickLine={false}/>
                 <YAxis tick={ax} axisLine={false} tickLine={false}/>
                 <Tooltip content={<Tip/>}/>
@@ -460,7 +495,7 @@ export default function Dashboard() {
           <ChartCard title="Monthly Bill Trend" sub="Total billing cost over recent months (Rs.)">
             <ResponsiveContainer width="100%" height={230}>
               <BarChart data={COST_CMP} margin={{ top:10, right:16, left:-10, bottom:0 }} barCategoryGap="35%">
-                <CartesianGrid strokeDasharray="4 4" stroke="#e8eaf0" vertical={false}/>
+                <CartesianGrid strokeDasharray="4 4" stroke={darkMode ? "#334155" : "#e8eaf0"} vertical={false}/>
                 <XAxis dataKey="m" tick={ax} axisLine={false} tickLine={false}/>
                 <YAxis tick={ax} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/1000).toFixed(0)}k`}/>
                 <Tooltip content={<Tip prefix="Rs."/>}/>
@@ -473,8 +508,8 @@ export default function Dashboard() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
-            <div style={{ margin:"0 8px", padding:"10px 14px", background:"#fffbeb",
-              border:"1px solid #fde68a", borderRadius:9, display:"flex", gap:8, alignItems:"flex-start" }}>
+            <div style={{ margin:"0 8px", padding:"10px 14px", background:C.amberL,
+              border:`1px solid ${C.amberM}`, borderRadius:9, display:"flex", gap:8, alignItems:"flex-start" }}>
               <FiAlertTriangle size={13} color={C.amber} style={{ marginTop:1, flexShrink:0 }}/>
               <p style={{ fontSize:"0.72rem", color:C.body, margin:0, lineHeight:1.55 }}>
                 <strong>Aug was your highest month</strong> (Rs. 8,400). Next month is predicted to be slightly higher than Nov.
@@ -524,7 +559,7 @@ export default function Dashboard() {
           <ChartCard title="Per-Utility Bill Comparison" sub="Water vs Electricity billing last 6 months (Rs.)">
             <ResponsiveContainer width="100%" height={230}>
               <BarChart data={TREND} margin={{ top:10, right:16, left:-10, bottom:0 }} barCategoryGap="25%">
-                <CartesianGrid strokeDasharray="4 4" stroke="#e8eaf0" vertical={false}/>
+                <CartesianGrid strokeDasharray="4 4" stroke={darkMode ? "#334155" : "#e8eaf0"} vertical={false}/>
                 <XAxis dataKey="m" tick={ax} axisLine={false} tickLine={false}/>
                 <YAxis tick={ax} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/1000).toFixed(1)}k`}/>
                 <Tooltip content={<Tip prefix="Rs."/>}/>
