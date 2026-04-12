@@ -9,8 +9,9 @@ import {
 import {
   FiBarChart2, FiTrendingUp, FiDollarSign, FiZap, FiDroplet, FiWifi,
   FiAlertTriangle, FiCheckCircle, FiActivity, FiDownload,
-  FiInfo, FiTarget, FiList, FiCpu, FiStar,
+  FiInfo, FiTarget, FiCpu,
 } from "react-icons/fi";
+import { useTheme } from "../context/ThemeContext";
 
 /* ─── Font ─── */
 if (!document.getElementById("db-font")) {
@@ -40,34 +41,9 @@ if (!document.getElementById("an-anim")) {
   document.head.appendChild(s);
 }
 
-/* ════ TOKENS ════ */
-const C = {
-  page:"#f3f4f8", card:"#fff", hover:"#f0f2f7",
-  ink:"#0f172a", body:"#334155", muted:"#64748b", faint:"#94a3b8",
-  border:"#e2e8f0",
-  blue:"#2563eb", blueL:"#eff6ff", blueM:"#bfdbfe",
-  teal:"#0891b2", tealL:"#ecfeff", tealM:"#a5f3fc",
-  green:"#059669", greenL:"#ecfdf5", greenM:"#a7f3d0",
-  amber:"#d97706", amberL:"#fffbeb", amberM:"#fde68a",
-  red:"#dc2626",   redL:"#fef2f2",   redM:"#fecaca",
-  violet:"#7c3aed",violetL:"#f5f3ff",violetM:"#ddd6fe",
-  indigo:"#4f46e5",indigoL:"#eef2ff",indigoM:"#c7d2fe",
-  s1:"0 1px 3px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04)",
-  s2:"0 4px 16px rgba(15,23,42,.08),0 2px 4px rgba(15,23,42,.04)",
-  s3:"0 12px 40px rgba(15,23,42,.10),0 4px 8px rgba(15,23,42,.04)",
-};
 const F = "'Plus Jakarta Sans',-apple-system,sans-serif";
-const ax = { fill:C.faint, fontSize:11, fontFamily:F };
 
-/* ── Utility meta ── */
-const UTIL_META = {
-  Electricity: { color:C.blue,   bg:C.blueL,   bdr:C.blueM,   icon:(s)=><FiZap size={s}/>,     flatRate:false },
-  Water:       { color:C.teal,   bg:C.tealL,   bdr:C.tealM,   icon:(s)=><FiDroplet size={s}/>, flatRate:false },
-  Internet:    { color:C.indigo, bg:C.indigoL, bdr:C.indigoM, icon:(s)=><FiWifi size={s}/>,    flatRate:true  },
-};
-const UTILITIES = Object.keys(UTIL_META);
-
-/* ════ DATA ════ */
+/* ════ DATA (moved outside component - static) ════ */
 const billsData = [
   { billingMonth:"Jan", utilityType:"Electricity", unitsUsed:320, billAmount:4800 },
   { billingMonth:"Feb", utilityType:"Electricity", unitsUsed:280, billAmount:4200 },
@@ -81,7 +57,6 @@ const billsData = [
   { billingMonth:"Apr", utilityType:"Water",       unitsUsed:44,  billAmount:880  },
   { billingMonth:"May", utilityType:"Water",       unitsUsed:46,  billAmount:920  },
   { billingMonth:"Jun", utilityType:"Water",       unitsUsed:50,  billAmount:1000 },
-  // ── Internet (flat-rate) ──
   { billingMonth:"Jan", utilityType:"Internet",    unitsUsed:0,   billAmount:3500 },
   { billingMonth:"Feb", utilityType:"Internet",    unitsUsed:0,   billAmount:3500 },
   { billingMonth:"Mar", utilityType:"Internet",    unitsUsed:0,   billAmount:4200 },
@@ -90,6 +65,7 @@ const billsData = [
   { billingMonth:"Jun", utilityType:"Internet",    unitsUsed:0,   billAmount:4200 },
 ];
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun"];
+const UTILITIES = ["Electricity", "Water", "Internet"];
 
 /* ════ HELPERS ════ */
 const exportToCSV = (data, filename) => {
@@ -103,83 +79,67 @@ const exportToCSV = (data, filename) => {
   URL.revokeObjectURL(url);
 };
 
-/* ════ SHARED UI ════ */
-const SectionLabel = ({ children }) => (
-  <p style={{ fontSize:"0.63rem", fontWeight:800, letterSpacing:"0.15em",
-    textTransform:"uppercase", color:C.faint, margin:"0 0 12px", fontFamily:F }}>
-    {children}
-  </p>
-);
-
-const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10,
-      padding:"10px 14px", boxShadow:C.s3, fontFamily:F, minWidth:150 }}>
-      <p style={{ fontSize:"0.7rem", fontWeight:700, color:C.muted, margin:"0 0 7px",
-        textTransform:"uppercase", letterSpacing:"0.08em" }}>{label}</p>
-      {payload.map((p,i) => (
-        <div key={i} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:i<payload.length-1?4:0 }}>
-          <span style={{ width:8, height:8, borderRadius:2, background:p.color, display:"inline-block" }}/>
-          <span style={{ fontSize:"0.75rem", color:C.muted, flex:1 }}>{p.name}</span>
-          <span style={{ fontSize:"0.8rem", fontWeight:700, color:C.ink }}>
-            {p.name?.toLowerCase().includes("cost") || p.name === "Internet"
-              ? `Rs. ${Number(p.value).toLocaleString()}` : p.value}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-};
-
-const ExportBtn = ({ onClick }) => (
-  <button className="an-export" onClick={onClick}
-    style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 12px",
-      borderRadius:8, border:`1px solid ${C.border}`, background:C.card,
-      color:C.muted, fontFamily:F, fontSize:"0.75rem", fontWeight:600,
-      cursor:"pointer", transition:"all .18s", whiteSpace:"nowrap", flexShrink:0 }}>
-    <FiDownload size={12}/> Export CSV
-  </button>
-);
-
-const ChartCard = ({ children, style={}, cls="" }) => (
-  <div className={`an-card ${cls}`}
-    style={{ background:C.card, borderRadius:16, border:`1px solid ${C.border}`,
-      boxShadow:C.s1, overflow:"hidden",
-      transition:"transform .22s ease, box-shadow .22s ease", ...style }}>
-    {children}
-  </div>
-);
-
-const ChartHead = ({ title, sub, action }) => (
-  <div style={{ padding:"20px 24px 0", display:"flex", justifyContent:"space-between",
-    alignItems:"flex-start", flexWrap:"wrap", gap:12, marginBottom:16 }}>
-    <div>
-      <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 2px" }}>{title}</h3>
-      {sub && <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{sub}</p>}
-    </div>
-    {action}
-  </div>
-);
-
 /* ════ MAIN COMPONENT ════ */
 const Analytics = () => {
+  const { darkMode } = useTheme();
+
+  // ⭐ C is memoized to prevent dependency changes in child hooks
+  const C = useMemo(() => ({
+    page:    darkMode ? "#0f172a" : "#f3f4f8",
+    card:    darkMode ? "#1e293b" : "#ffffff",
+    hover:   darkMode ? "#334155" : "#f0f2f7",
+    ink:     darkMode ? "#f1f5f9" : "#0f172a",
+    body:    darkMode ? "#cbd5e1" : "#334155",
+    muted:   darkMode ? "#94a3b8" : "#64748b",
+    faint:   darkMode ? "#64748b" : "#94a3b8",
+    border:  darkMode ? "#334155" : "#e2e8f0",
+    blue:    "#2563eb",
+    blueL:   darkMode ? "rgba(37,99,235,0.15)"  : "#eff6ff",
+    blueM:   darkMode ? "#1e3a8a"               : "#bfdbfe",
+    teal:    "#0891b2",
+    tealL:   darkMode ? "rgba(8,145,178,0.15)" : "#ecfeff",
+    tealM:   darkMode ? "#164e63"               : "#a5f3fc",
+    green:   "#059669",
+    greenL:  darkMode ? "rgba(5,150,105,0.15)"  : "#ecfdf5",
+    greenM:  darkMode ? "#064e3b"               : "#a7f3d0",
+    amber:   "#d97706",
+    amberL:  darkMode ? "rgba(217,119,6,0.15)"  : "#fffbeb",
+    amberM:  darkMode ? "#78350f"               : "#fde68a",
+    red:     "#dc2626",
+    redL:    darkMode ? "rgba(220,38,38,0.15)"  : "#fef2f2",
+    redM:    darkMode ? "#7f1d1d"               : "#fecaca",
+    violet:  "#7c3aed",
+    violetL: darkMode ? "rgba(124,58,237,0.15)" : "#f5f3ff",
+    violetM: darkMode ? "#4c1d95"               : "#ddd6fe",
+    indigo:  "#4f46e5",
+    indigoL: darkMode ? "rgba(79,70,229,0.15)"  : "#eef2ff",
+    indigoM: darkMode ? "#312e81"               : "#c7d2fe",
+    s1: "0 1px 3px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04)",
+    s2: "0 4px 16px rgba(15,23,42,.08),0 2px 4px rgba(15,23,42,.04)",
+    s3: "0 12px 40px rgba(15,23,42,.10),0 4px 8px rgba(15,23,42,.04)",
+  }), [darkMode]);
+
+  // Utility meta (memoized to prevent dependency array issues in child useMemo hooks)
+  const UTIL_META = useMemo(() => ({
+    Electricity: { color:C.blue,   bg:C.blueL,   bdr:C.blueM,   icon:(s)=><FiZap size={s}/>,     flatRate:false },
+    Water:       { color:C.teal,   bg:C.tealL,   bdr:C.tealM,   icon:(s)=><FiDroplet size={s}/>, flatRate:false },
+    Internet:    { color:C.indigo, bg:C.indigoL, bdr:C.indigoM, icon:(s)=><FiWifi size={s}/>,    flatRate:true  },
+  }), [C]);
+
   const [filter,       setFilter]       = useState("All");
   const [analysisView, setAnalysisView] = useState("overview");
 
   const isFlat    = filter !== "All" && UTIL_META[filter]?.flatRate;
-  const isMetered = filter !== "All" && !UTIL_META[filter]?.flatRate;
 
   /* ── Filtered data ── */
   const filteredData = useMemo(() =>
     filter === "All" ? billsData : billsData.filter(b => b.utilityType === filter),
   [filter]);
 
-  /* ── Stats — units are meaningless for Internet ── */
+  /* ── Stats ── */
   const stats = useMemo(() => {
     const totalBills  = filteredData.length;
     const totalAmount = filteredData.reduce((s,b) => s+b.billAmount, 0);
-    // For Internet filter: skip unit-based metrics
     const meteredRows = isFlat ? [] : filteredData.filter(b => !UTIL_META[b.utilityType]?.flatRate);
     const totalUnits  = meteredRows.reduce((s,b) => s+b.unitsUsed, 0);
     const avgUsage    = meteredRows.length ? Math.round(totalUnits/meteredRows.length) : 0;
@@ -192,21 +152,21 @@ const Analytics = () => {
       peakUsage:  isFlat ? `Rs. ${(peak.billAmount||0).toLocaleString()}` : (peak.unitsUsed||0),
       peakMonth:  peak.billingMonth||"N/A",
     };
-  }, [filteredData, isFlat]);
+  }, [filteredData, isFlat, UTIL_META]);
 
-  /* ── Monthly usage chart — Internet excluded (no units) ── */
+  /* ── Monthly usage chart ── */
   const monthlyUsageData = useMemo(() => {
     const map = {};
     filteredData.forEach(b => {
-      if (UTIL_META[b.utilityType]?.flatRate) return; // skip flat-rate
+      if (UTIL_META[b.utilityType]?.flatRate) return;
       if (!map[b.billingMonth]) map[b.billingMonth] = { month:b.billingMonth };
       map[b.billingMonth][b.utilityType] = b.unitsUsed;
       map[b.billingMonth][`${b.utilityType}Cost`] = b.billAmount;
     });
     return MONTHS.filter(m => map[m]).map(m => map[m]);
-  }, [filteredData]);
+  }, [filteredData, UTIL_META]);
 
-  /* ── Monthly cost chart — includes Internet ── */
+  /* ── Monthly cost chart ── */
   const monthlyCostData = useMemo(() => {
     const map = {};
     filteredData.forEach(b => {
@@ -217,7 +177,7 @@ const Analytics = () => {
     return MONTHS.filter(m => map[m]).map(m => map[m]);
   }, [filteredData]);
 
-  /* ── Pie distribution — cost-based so Internet participates ── */
+  /* ── Pie distribution ── */
   const distributionData = useMemo(() => {
     const dist = {};
     filteredData.forEach(b => {
@@ -227,13 +187,13 @@ const Analytics = () => {
     });
     const totalCost = Object.values(dist).reduce((s,d) => s+d.cost, 0);
     return Object.entries(dist).map(([name,d]) => ({
-      name, value:d.cost, units:d.units,   // value = cost so Internet shows up
+      name, value:d.cost, units:d.units,
       percentage: Math.round((d.cost/totalCost)*100),
       color: UTIL_META[name]?.color || C.blue,
     }));
-  }, [filteredData]);
+  }, [filteredData, UTIL_META, C]);
 
-  /* ── Efficiency — cost/unit, skip Internet ── */
+  /* ── Efficiency data ── */
   const efficiencyData = useMemo(() => {
     const map = {};
     filteredData.forEach(b => {
@@ -245,9 +205,9 @@ const Analytics = () => {
     return MONTHS.filter(m => map[m]).map(m => ({
       month:m, "Cost/Unit":+(map[m].cost/map[m].units).toFixed(2),
     }));
-  }, [filteredData]);
+  }, [filteredData, UTIL_META]);
 
-  /* ── Comparison data — only metered utilities ── */
+  /* ── Comparison data ── */
   const comparisonData = useMemo(() => {
     const map = {};
     filteredData.forEach(b => {
@@ -258,17 +218,11 @@ const Analytics = () => {
     const rows = MONTHS.filter(m => map[m]).map(m => map[m]);
     const avg  = rows.reduce((s,r) => s+r.Electricity+r.Water, 0)/(rows.length||1);
     return rows.map(r => ({ ...r, Average:Math.round(avg) }));
-  }, [filteredData]);
+  }, [filteredData, UTIL_META]);
 
-  /* ── Internet monthly cost trend (for comparison view) ── */
-  const internetCostData = useMemo(() => {
-    const rows = billsData.filter(b => b.utilityType==="Internet");
-    const map  = {};
-    rows.forEach(b => { map[b.billingMonth] = b.billAmount; });
-    return MONTHS.filter(m => map[m]).map(m => ({ month:m, Internet:map[m] }));
-  }, []);
 
-  /* ── Radar — original logic, add Internet spend score ── */
+
+  /* ── Radar data ── */
   const radarData = useMemo(() => {
     const elec = billsData.filter(b => b.utilityType==="Electricity");
     const watr = billsData.filter(b => b.utilityType==="Water");
@@ -283,7 +237,6 @@ const Analytics = () => {
     const eTrend=eU[eU.length-1]<eU[0]?85:60, wTrend=wU[wU.length-1]<wU[0]?85:65;
     const eBudget=elec.filter(b=>b.billAmount<5000).length/elec.length*100;
     const wBudget=watr.filter(b=>b.billAmount<950).length/watr.length*100;
-    // Internet: rate consistency score (lower variance = higher score)
     const nAmts = net.map(b=>b.billAmount);
     const nVar  = variance(nAmts);
     const nConsistency = Math.max(50, 100-Math.round(nVar/10000));
@@ -298,7 +251,7 @@ const Analytics = () => {
     ];
   }, []);
 
-  /* ── Insights — extended for Internet ── */
+  /* ── Insights ── */
   const insights = useMemo(() => {
     const result = [];
     const recent = filteredData.slice(-4), older = filteredData.slice(-8,-4);
@@ -352,7 +305,7 @@ const Analytics = () => {
       value:"ROI: 3–6 months" });
 
     return result;
-  }, [filteredData, isFlat]);
+  }, [filteredData, isFlat, UTIL_META]);
 
   const recommendations = [
     { icon:<FiCpu size={16}/>,       title:"Temperature Optimisation",  desc:"Smart thermostat controls with 2°C adjustment to reduce HVAC load.",                   savings:"Rs. 450/mo", roi:"4 months", impl:"2 weeks"  },
@@ -368,12 +321,71 @@ const Analytics = () => {
     info:   { accent:C.blue,  bg:C.blueL,  bdr:C.blueM  },
   };
 
-  /* ════ VIEW RENDERERS ════ */
+  // Shared components that need C
+  const SectionLabel = ({ children }) => (
+    <p style={{ fontSize:"0.63rem", fontWeight:800, letterSpacing:"0.15em",
+      textTransform:"uppercase", color:C.faint, margin:"0 0 12px", fontFamily:F }}>
+      {children}
+    </p>
+  );
 
+  const CustomTooltip = ({ active, payload, label }) => {
+    if (!active || !payload?.length) return null;
+    return (
+      <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10,
+        padding:"10px 14px", boxShadow:C.s3, fontFamily:F, minWidth:150 }}>
+        <p style={{ fontSize:"0.7rem", fontWeight:700, color:C.muted, margin:"0 0 7px",
+          textTransform:"uppercase", letterSpacing:"0.08em" }}>{label}</p>
+        {payload.map((p,i) => (
+          <div key={i} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:i<payload.length-1?4:0 }}>
+            <span style={{ width:8, height:8, borderRadius:2, background:p.color, display:"inline-block" }}/>
+            <span style={{ fontSize:"0.75rem", color:C.muted, flex:1 }}>{p.name}</span>
+            <span style={{ fontSize:"0.8rem", fontWeight:700, color:C.ink }}>
+              {p.name?.toLowerCase().includes("cost") || p.name === "Internet"
+                ? `Rs. ${Number(p.value).toLocaleString()}` : p.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const ExportBtn = ({ onClick }) => (
+    <button className="an-export" onClick={onClick}
+      style={{ display:"flex", alignItems:"center", gap:6, padding:"6px 12px",
+        borderRadius:8, border:`1px solid ${C.border}`, background:C.card,
+        color:C.muted, fontFamily:F, fontSize:"0.75rem", fontWeight:600,
+        cursor:"pointer", transition:"all .18s", whiteSpace:"nowrap", flexShrink:0 }}>
+      <FiDownload size={12}/> Export CSV
+    </button>
+  );
+
+  const ChartCard = ({ children, style={}, cls="" }) => (
+    <div className={`an-card ${cls}`}
+      style={{ background:C.card, borderRadius:16, border:`1px solid ${C.border}`,
+        boxShadow:C.s1, overflow:"hidden",
+        transition:"transform .22s ease, box-shadow .22s ease", ...style }}>
+      {children}
+    </div>
+  );
+
+  const ChartHead = ({ title, sub, action }) => (
+    <div style={{ padding:"20px 24px 0", display:"flex", justifyContent:"space-between",
+      alignItems:"flex-start", flexWrap:"wrap", gap:12, marginBottom:16 }}>
+      <div>
+        <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 2px" }}>{title}</h3>
+        {sub && <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{sub}</p>}
+      </div>
+      {action}
+    </div>
+  );
+
+  const ax = { fill:C.faint, fontSize:11, fontFamily:F };
+
+  /* ── VIEW RENDERERS ── */
   const renderOverview = () => (
     <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:20, marginBottom:28 }}>
 
-      {/* Consumption Area — metered only; replaced by cost chart for Internet-only */}
       {!isFlat ? (
         <ChartCard cls="an-fu an-fu1" style={{ gridColumn:"1/-1" }}>
           <ChartHead title="Consumption Trend" sub="Monthly unit usage (metered utilities)"
@@ -394,7 +406,7 @@ const Analytics = () => {
                 <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
                 <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
                 <YAxis tick={ax} axisLine={false} tickLine={false}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <Tooltip content={<CustomTooltip />}/>
                 <Legend wrapperStyle={{ fontSize:"0.75rem", fontFamily:F, paddingTop:8 }}/>
                 {(filter==="All"||filter==="Electricity") &&
                   <Area type="monotone" dataKey="Electricity" stroke={C.blue} strokeWidth={2.5}
@@ -407,7 +419,6 @@ const Analytics = () => {
           </div>
         </ChartCard>
       ) : (
-        /* Internet-only: show flat-rate bill trend spanning full width */
         <ChartCard cls="an-fu an-fu1" style={{ gridColumn:"1/-1" }}>
           <ChartHead title="Monthly Internet Bill Trend" sub="Flat-rate plan charges over time"
             action={<ExportBtn onClick={() => exportToCSV(filteredData,"internet-cost.csv")}/>}/>
@@ -423,7 +434,7 @@ const Analytics = () => {
                 <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
                 <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
                 <YAxis tick={ax} axisLine={false} tickLine={false}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <Tooltip content={<CustomTooltip />}/>
                 <Area type="monotone" dataKey="Internet" stroke={C.indigo} strokeWidth={2.5}
                   fill="url(#gI)" dot={{ fill:C.indigo, r:4 }} activeDot={{ r:6 }}/>
               </AreaChart>
@@ -432,7 +443,6 @@ const Analytics = () => {
         </ChartCard>
       )}
 
-      {/* Distribution Pie — cost-based so Internet is included */}
       <ChartCard cls="an-fu an-fu2">
         <ChartHead title="Cost Allocation" sub="Budget distribution by utility (Rs.)"/>
         <div style={{ padding:"0 20px 20px" }}>
@@ -463,7 +473,6 @@ const Analytics = () => {
         </div>
       </ChartCard>
 
-      {/* Cost per unit bar — hidden for Internet-only; shows total cost bar instead */}
       {!isFlat ? (
         <ChartCard cls="an-fu an-fu3">
           <ChartHead title="Cost per Unit" sub="Monthly unit cost efficiency"/>
@@ -473,7 +482,7 @@ const Analytics = () => {
                 <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
                 <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
                 <YAxis tick={ax} axisLine={false} tickLine={false}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <Tooltip content={<CustomTooltip />}/>
                 <Bar dataKey="Cost/Unit" fill={C.violet} radius={[6,6,0,0]}/>
               </BarChart>
             </ResponsiveContainer>
@@ -488,7 +497,7 @@ const Analytics = () => {
                 <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
                 <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
                 <YAxis tick={ax} axisLine={false} tickLine={false}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <Tooltip content={<CustomTooltip />}/>
                 <Bar dataKey="Internet" fill={C.indigo} radius={[6,6,0,0]}/>
               </BarChart>
             </ResponsiveContainer>
@@ -509,7 +518,7 @@ const Analytics = () => {
               <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
               <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
               <YAxis tick={ax} axisLine={false} tickLine={false}/>
-              <Tooltip content={<CustomTooltip/>}/>
+              <Tooltip content={<CustomTooltip />}/>
               <Legend wrapperStyle={{ fontSize:"0.75rem", fontFamily:F, paddingTop:8 }}/>
               {(filter==="All"||filter==="Electricity") &&
                 <Line type="monotone" dataKey="Electricity" stroke={C.blue} strokeWidth={2.5}
@@ -526,7 +535,6 @@ const Analytics = () => {
         </div>
       </ChartCard>
 
-      {/* Usage vs Cost — only for metered utilities */}
       {!isFlat && (
         <ChartCard cls="an-fu an-fu2">
           <ChartHead title="Usage vs Cost Correlation" sub="Comparing consumption units against billing amounts"/>
@@ -536,7 +544,7 @@ const Analytics = () => {
                 <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
                 <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
                 <YAxis tick={ax} axisLine={false} tickLine={false}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <Tooltip content={<CustomTooltip />}/>
                 <Legend wrapperStyle={{ fontSize:"0.75rem", fontFamily:F, paddingTop:8 }}/>
                 {(filter==="All"||filter==="Electricity") &&
                   <Bar dataKey="Electricity" fill={C.blue}  radius={[4,4,0,0]} barSize={20}/>}
@@ -548,7 +556,6 @@ const Analytics = () => {
         </ChartCard>
       )}
 
-      {/* Internet flat-rate note when Internet-only */}
       {isFlat && (
         <ChartCard cls="an-fu an-fu2">
           <div style={{ padding:"20px 24px", display:"flex", alignItems:"flex-start", gap:12 }}>
@@ -606,7 +613,6 @@ const Analytics = () => {
         </div>
       </ChartCard>
 
-      {/* Unit cost bar — only for metered */}
       {!isFlat && (
         <ChartCard cls="an-fu an-fu2">
           <ChartHead title="Unit Cost Efficiency by Month" sub="Rs. per unit consumed — lower is better"
@@ -617,7 +623,7 @@ const Analytics = () => {
                 <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
                 <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
                 <YAxis tick={ax} axisLine={false} tickLine={false}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <Tooltip content={<CustomTooltip />}/>
                 <Bar dataKey="Cost/Unit" radius={[6,6,0,0]}>
                   {efficiencyData.map((e,i) =>
                     <Cell key={i} fill={e["Cost/Unit"]>15?C.red:C.violet}/>)}
@@ -635,7 +641,6 @@ const Analytics = () => {
         </ChartCard>
       )}
 
-      {/* Internet-only: flat-rate consistency card */}
       {isFlat && (
         <ChartCard cls="an-fu an-fu2">
           <ChartHead title="Plan Charge Consistency" sub="Monthly Internet bill vs plan average"/>
@@ -645,7 +650,7 @@ const Analytics = () => {
                 <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
                 <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
                 <YAxis tick={ax} axisLine={false} tickLine={false}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <Tooltip content={<CustomTooltip />}/>
                 <Bar dataKey="Internet" radius={[6,6,0,0]}>
                   {monthlyCostData.map((e,i) => {
                     const avg = monthlyCostData.reduce((s,r)=>s+(r.Internet||0),0)/monthlyCostData.length;
@@ -669,7 +674,6 @@ const Analytics = () => {
 
   const renderComparison = () => (
     <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:20, marginBottom:28 }}>
-      {/* Benchmarking — metered only */}
       {!isFlat && (
         <ChartCard cls="an-fu an-fu1">
           <ChartHead title="Period-over-Period Benchmarking" sub="Monthly usage vs overall average baseline"
@@ -680,7 +684,7 @@ const Analytics = () => {
                 <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
                 <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
                 <YAxis tick={ax} axisLine={false} tickLine={false}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <Tooltip content={<CustomTooltip />}/>
                 <Legend wrapperStyle={{ fontSize:"0.75rem", fontFamily:F, paddingTop:8 }}/>
                 {(filter==="All"||filter==="Electricity") &&
                   <Bar dataKey="Electricity" fill={C.blue}  radius={[4,4,0,0]} barSize={18}/>}
@@ -693,7 +697,6 @@ const Analytics = () => {
         </ChartCard>
       )}
 
-      {/* Stacked cost breakdown — always shown, includes Internet */}
       <ChartCard cls="an-fu an-fu2">
         <ChartHead title="Monthly Cost Breakdown" sub="Total bill amount stacked by utility type"/>
         <div style={{ padding:"0 8px 20px" }}>
@@ -702,7 +705,7 @@ const Analytics = () => {
               <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
               <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
               <YAxis tick={ax} axisLine={false} tickLine={false}/>
-              <Tooltip content={<CustomTooltip/>}/>
+              <Tooltip content={<CustomTooltip />}/>
               <Legend wrapperStyle={{ fontSize:"0.75rem", fontFamily:F, paddingTop:8 }}/>
               {(filter==="All"||filter==="Electricity") &&
                 <Bar dataKey="Electricity" stackId="a" fill={C.blue}/>}
@@ -722,7 +725,7 @@ const Analytics = () => {
   /* ════ RENDER ════ */
   return (
     <div style={{ minHeight:"100vh", background:C.page, fontFamily:F,
-      color:C.ink, padding:"28px 32px 64px" }}>
+      color:C.ink, padding:"28px 32px 64px", transition:"background 0.3s ease, color 0.3s ease" }}>
 
       {/* HEADER */}
       <div className="an-fu an-fu1" style={{ display:"flex", justifyContent:"space-between",
@@ -736,7 +739,6 @@ const Analytics = () => {
           </p>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
-          {/* Filter — now 4 buttons (All + 3 utilities) */}
           <div style={{ display:"flex", background:C.card, border:`1px solid ${C.border}`,
             borderRadius:10, padding:3, gap:2 }}>
             {["All", ...UTILITIES].map(f => {
