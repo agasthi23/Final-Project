@@ -3,9 +3,9 @@ import { useState, useMemo, useEffect } from "react";
 import { FiZap, FiDroplet, FiEdit2, FiTrash2, FiCheck, FiX,
          FiTrendingUp, FiDollarSign, FiList, FiAlertCircle,
          FiFilter, FiChevronDown, FiWifi } from "react-icons/fi";
+import { useTheme } from "../context/ThemeContext";
 
 const API_URL = "http://localhost:5000/api/bills";
-
 const getToken = () => localStorage.getItem("authToken");
 
 if (!document.getElementById("db-font")) {
@@ -34,23 +34,8 @@ if (!document.getElementById("ab-anim")) {
   document.head.appendChild(s);
 }
 
-const C = {
-  page:"#f3f4f8", card:"#fff", hover:"#f0f2f7",
-  ink:"#0f172a", body:"#334155", muted:"#64748b", faint:"#94a3b8",
-  border:"#e2e8f0", borderB:"#cbd5e1",
-  blue:"#2563eb", blueD:"#1d4ed8", blueL:"#eff6ff", blueM:"#bfdbfe",
-  teal:"#0891b2", tealL:"#ecfeff", tealM:"#a5f3fc",
-  green:"#059669", greenL:"#ecfdf5", greenM:"#a7f3d0",
-  amber:"#d97706", amberL:"#fffbeb", amberM:"#fde68a",
-  red:"#dc2626",   redL:"#fef2f2",   redM:"#fecaca",
-  violet:"#7c3aed",violetL:"#f5f3ff",violetM:"#ddd6fe",
-  // ── new: Internet accent (indigo) ──
-  indigo:"#4f46e5", indigoL:"#eef2ff", indigoM:"#c7d2fe",
-  s1:"0 1px 3px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04)",
-  s2:"0 4px 16px rgba(15,23,42,.08),0 2px 4px rgba(15,23,42,.04)",
-  s3:"0 12px 40px rgba(15,23,42,.10),0 4px 8px rgba(15,23,42,.04)",
-};
 const F = "'Plus Jakarta Sans',-apple-system,sans-serif";
+const UTILITIES = ["Electricity", "Water", "Internet"];
 
 const fmt = (n) => Number(n).toLocaleString();
 const fmtMonth = (m) => {
@@ -59,48 +44,85 @@ const fmtMonth = (m) => {
   return new Date(y, mo - 1).toLocaleString("default", { month:"long", year:"numeric" });
 };
 
-// ── Utility meta helpers ──
-const UTILITIES = ["Electricity", "Water", "Internet"];
-
-const typeColor = (t) => t === "Electricity" ? C.blue  : t === "Water" ? C.teal  : C.indigo;
-const typeBg    = (t) => t === "Electricity" ? C.blueL : t === "Water" ? C.tealL : C.indigoL;
-const typeBdr   = (t) => t === "Electricity" ? C.blueM : t === "Water" ? C.tealM : C.indigoM;
-const typeIcon  = (t) => t === "Electricity" ? <FiZap size={13}/> : t === "Water" ? <FiDroplet size={13}/> : <FiWifi size={13}/>;
-// Internet bills are flat-rate — no meaningful "unit" to track
-const unitLabel = (t) => t === "Electricity" ? "kWh" : t === "Water" ? "Units" : null;
-
-const SectionLabel = ({ children }) => (
-  <p style={{ fontSize:"0.63rem", fontWeight:800, letterSpacing:"0.15em",
-    textTransform:"uppercase", color:C.faint, margin:"0 0 12px", fontFamily:F }}>
-    {children}
-  </p>
-);
-
-const Card = ({ children, style={}, className="" }) => (
-  <div className={`ab-card-hover ${className}`}
-    style={{ background:C.card, borderRadius:16, border:`1px solid ${C.border}`,
-      boxShadow:C.s1, overflow:"hidden",
-      transition:"transform .22s ease, box-shadow .22s ease", ...style }}>
-    {children}
-  </div>
-);
-
-const InsightTile = ({ icon, label, value, accent, bg, bdr, sub }) => (
-  <div style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px",
-    background:bg, border:`1px solid ${bdr}`, borderRadius:12 }}>
-    <div style={{ width:38, height:38, borderRadius:9, background:C.card,
-      border:`1px solid ${bdr}`, display:"flex", alignItems:"center",
-      justifyContent:"center", color:accent, flexShrink:0 }}>{icon}</div>
-    <div style={{ flex:1, minWidth:0 }}>
-      <p style={{ fontSize:"0.68rem", fontWeight:700, color:accent, margin:0,
-        textTransform:"uppercase", letterSpacing:"0.09em" }}>{label}</p>
-      <p style={{ fontSize:"1rem", fontWeight:800, color:C.ink, margin:"2px 0 0", letterSpacing:"-0.02em" }}>{value}</p>
-      {sub && <p style={{ fontSize:"0.7rem", color:C.muted, margin:"1px 0 0" }}>{sub}</p>}
-    </div>
-  </div>
-);
-
 export default function AddBill() {
+  const { darkMode } = useTheme();
+
+  // ⭐ C is now INSIDE the component - reacts to darkMode
+  const C = {
+    page:    darkMode ? "#0f172a" : "#f3f4f8",
+    card:    darkMode ? "#1e293b" : "#ffffff",
+    hover:   darkMode ? "#334155" : "#f0f2f7",
+    ink:     darkMode ? "#f1f5f9" : "#0f172a",
+    body:    darkMode ? "#cbd5e1" : "#334155",
+    muted:   darkMode ? "#94a3b8" : "#64748b",
+    faint:   darkMode ? "#64748b" : "#94a3b8",
+    border:  darkMode ? "#334155" : "#e2e8f0",
+    borderB: darkMode ? "#475569" : "#cbd5e1",
+    blue:    "#2563eb",
+    blueD:   "#1d4ed8",
+    blueL:   darkMode ? "rgba(37,99,235,0.15)"  : "#eff6ff",
+    blueM:   darkMode ? "#1e3a8a"               : "#bfdbfe",
+    teal:    "#0891b2",
+    tealL:   darkMode ? "rgba(8,145,178,0.15)" : "#ecfeff",
+    tealM:   darkMode ? "#164e63"               : "#a5f3fc",
+    green:   "#059669",
+    greenL:  darkMode ? "rgba(5,150,105,0.15)"  : "#ecfdf5",
+    greenM:  darkMode ? "#064e3b"               : "#a7f3d0",
+    amber:   "#d97706",
+    amberL:  darkMode ? "rgba(217,119,6,0.15)"  : "#fffbeb",
+    amberM:  darkMode ? "#78350f"               : "#fde68a",
+    red:     "#dc2626",
+    redL:    darkMode ? "rgba(220,38,38,0.15)"  : "#fef2f2",
+    redM:    darkMode ? "#7f1d1d"               : "#fecaca",
+    violet:  "#7c3aed",
+    violetL: darkMode ? "rgba(124,58,237,0.15)" : "#f5f3ff",
+    violetM: darkMode ? "#4c1d95"               : "#ddd6fe",
+    indigo:  "#4f46e5",
+    indigoL: darkMode ? "rgba(79,70,229,0.15)"  : "#eef2ff",
+    indigoM: darkMode ? "#312e81"               : "#c7d2fe",
+    s1: "0 1px 3px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04)",
+    s2: "0 4px 16px rgba(15,23,42,.08),0 2px 4px rgba(15,23,42,.04)",
+    s3: "0 12px 40px rgba(15,23,42,.10),0 4px 8px rgba(15,23,42,.04)",
+  };
+
+  // Utility helpers (now use C from inside)
+  const typeColor = (t) => t === "Electricity" ? C.blue  : t === "Water" ? C.teal  : C.indigo;
+  const typeBg    = (t) => t === "Electricity" ? C.blueL : t === "Water" ? C.tealL : C.indigoL;
+  const typeBdr   = (t) => t === "Electricity" ? C.blueM : t === "Water" ? C.tealM : C.indigoM;
+  const typeIcon  = (t) => t === "Electricity" ? <FiZap size={13}/> : t === "Water" ? <FiDroplet size={13}/> : <FiWifi size={13}/>;
+  const unitLabel = (t) => t === "Electricity" ? "kWh" : t === "Water" ? "Units" : null;
+
+  const SectionLabel = ({ children }) => (
+    <p style={{ fontSize:"0.63rem", fontWeight:800, letterSpacing:"0.15em",
+      textTransform:"uppercase", color:C.faint, margin:"0 0 12px", fontFamily:F }}>
+      {children}
+    </p>
+  );
+
+  const Card = ({ children, style={}, className="" }) => (
+    <div className={`ab-card-hover ${className}`}
+      style={{ background:C.card, borderRadius:16, border:`1px solid ${C.border}`,
+        boxShadow:C.s1, overflow:"hidden",
+        transition:"transform .22s ease, box-shadow .22s ease", ...style }}>
+      {children}
+    </div>
+  );
+
+  const InsightTile = ({ icon, label, value, accent, bg, bdr, sub }) => (
+    <div style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px",
+      background:bg, border:`1px solid ${bdr}`, borderRadius:12 }}>
+      <div style={{ width:38, height:38, borderRadius:9, background:C.card,
+        border:`1px solid ${bdr}`, display:"flex", alignItems:"center",
+        justifyContent:"center", color:accent, flexShrink:0 }}>{icon}</div>
+      <div style={{ flex:1, minWidth:0 }}>
+        <p style={{ fontSize:"0.68rem", fontWeight:700, color:accent, margin:0,
+          textTransform:"uppercase", letterSpacing:"0.09em" }}>{label}</p>
+        <p style={{ fontSize:"1rem", fontWeight:800, color:C.ink, margin:"2px 0 0", letterSpacing:"-0.02em" }}>{value}</p>
+        {sub && <p style={{ fontSize:"0.7rem", color:C.muted, margin:"1px 0 0" }}>{sub}</p>}
+      </div>
+    </div>
+  );
+
   const [utilityType,  setUtilityType]  = useState("Electricity");
   const [selMonth,     setSelMonth]     = useState("");
   const [selYear,      setSelYear]      = useState("2025");
@@ -123,11 +145,9 @@ export default function AddBill() {
 
   const billingMonthKey = selYear && selMonth ? `${selYear}-${selMonth}` : "";
   const isInternet = utilityType === "Internet";
-  // Internet has no units — cost-per-unit is N/A
   const costPerUnit = !isInternet && unitsUsed && billAmount && Number(unitsUsed) > 0
     ? (Number(billAmount) / Number(unitsUsed)).toFixed(2) : null;
 
-  // ── Load bills on mount ──
   useEffect(() => { fetchBills(); }, []);
 
   const fetchBills = async () => {
@@ -146,7 +166,6 @@ export default function AddBill() {
     }
   };
 
-  // ── Filtered + sorted ──
   const filteredBills = useMemo(() => {
     let list = filterType === "All" ? bills : bills.filter(b => b.utilityType === filterType);
     return [...list].sort((a, b) =>
@@ -156,7 +175,6 @@ export default function AddBill() {
     );
   }, [bills, filterType, sortDir]);
 
-  // ── Insights ──
   const insights = useMemo(() => {
     if (!bills.length) return null;
     const elecBills    = bills.filter(b => b.utilityType === "Electricity");
@@ -178,7 +196,6 @@ export default function AddBill() {
       elecCount: elecBills.length, waterCount: waterBills.length, internetCount: internetBills.length };
   }, [bills]);
 
-  // ── Submit (Create) ──
   const handleSubmit = async (e) => {
     e.preventDefault();
     setDupWarning(""); setSuccessMsg("");
@@ -190,7 +207,6 @@ export default function AddBill() {
         utilityType,
         billingMonth: billingMonthKey,
         billAmount: Number(billAmount),
-        // Send unitsUsed only when relevant; Internet sends 0
         unitsUsed: isInternet ? 0 : Number(unitsUsed),
       };
       const res = await fetch(API_URL, {
@@ -212,7 +228,6 @@ export default function AddBill() {
     }
   };
 
-  // ── Delete ──
   const handleDelete = async (id) => {
     try {
       const res = await fetch(`${API_URL}/${id}`, {
@@ -224,7 +239,6 @@ export default function AddBill() {
     } catch (err) { alert(err.message); }
   };
 
-  // ── Edit ──
   const startEdit = (bill) => {
     setEditId(bill._id);
     setEditUnits(String(bill.unitsUsed));
@@ -250,7 +264,7 @@ export default function AddBill() {
   const cancelEdit = () => setEditId(null);
 
   return (
-    <div style={{ minHeight:"100vh", background:C.page, fontFamily:F, color:C.ink, padding:"28px 32px 64px" }}>
+    <div style={{ minHeight:"100vh", background:C.page, fontFamily:F, color:C.ink, padding:"28px 32px 64px", transition:"background 0.3s ease, color 0.3s ease" }}>
 
       {/* HEADER */}
       <div className="ab-fu" style={{ marginBottom:28 }}>
@@ -291,7 +305,6 @@ export default function AddBill() {
             )}
 
             <form onSubmit={handleSubmit}>
-              {/* Utility toggle — now 3 buttons */}
               <div style={{ marginBottom:20 }}>
                 <p style={{ fontSize:"0.72rem", fontWeight:700, color:C.muted,
                   textTransform:"uppercase", letterSpacing:"0.08em", margin:"0 0 8px" }}>Utility Type</p>
@@ -318,7 +331,6 @@ export default function AddBill() {
                 </div>
               </div>
 
-              {/* Month + Year */}
               <div style={{ marginBottom:16 }}>
                 <label style={{ display:"block", fontSize:"0.78rem", fontWeight:600,
                   color:C.body, marginBottom:6 }}>Billing Month &amp; Year</label>
@@ -364,7 +376,6 @@ export default function AddBill() {
                 </div>
               </div>
 
-              {/* Units — hidden for Internet (flat-rate) */}
               {!isInternet && (
                 <div style={{ marginBottom:16 }}>
                   <label style={{ display:"block", fontSize:"0.78rem", fontWeight:600,
@@ -381,7 +392,6 @@ export default function AddBill() {
                 </div>
               )}
 
-              {/* Amount */}
               <div style={{ marginBottom:16 }}>
                 <label style={{ display:"block", fontSize:"0.78rem", fontWeight:600,
                   color:C.body, marginBottom:6 }}>Bill Amount (Rs.)</label>
@@ -396,7 +406,6 @@ export default function AddBill() {
                   onBlur={e  => { e.target.style.borderColor=C.border; e.target.style.background=C.hover; e.target.style.boxShadow="none"; }}/>
               </div>
 
-              {/* Internet info pill — replaces cost-per-unit */}
               {isInternet && billAmount && (
                 <div className="ab-pop" style={{ display:"flex", alignItems:"center",
                   justifyContent:"space-between", padding:"10px 14px",
@@ -448,7 +457,6 @@ export default function AddBill() {
                 value={insights?.avgWater ? `Rs. ${fmt(insights.avgWater)}` : "—"}
                 accent={C.teal} bg={C.tealL} bdr={C.tealM}
                 sub={insights?.waterCount ? `${insights.waterCount} bill${insights.waterCount!==1?"s":""}` : "No data"}/>
-              {/* ── new Internet insight tile ── */}
               <InsightTile icon={<FiWifi size={17}/>} label="Avg. Internet Bill"
                 value={insights?.avgInternet ? `Rs. ${fmt(insights.avgInternet)}` : "—"}
                 accent={C.indigo} bg={C.indigoL} bdr={C.indigoM}
@@ -493,7 +501,6 @@ export default function AddBill() {
             </p>
           </div>
           <div style={{ display:"flex", gap:8, alignItems:"center" }}>
-            {/* Filter tabs — now includes Internet */}
             <div style={{ display:"flex", background:C.hover, border:`1px solid ${C.border}`,
               borderRadius:9, padding:3, gap:2 }}>
               {["All", ...UTILITIES].map(t => (
