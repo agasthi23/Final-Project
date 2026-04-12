@@ -23,7 +23,7 @@
 }
 
 /* ========== DARK THEME ========== */
-.dark {
+.dark-mode {
   --bg-primary: #0f172a;
   --bg-card: #1e293b;
   --bg-hover: #334155;
@@ -48,4 +48,57 @@ body {
   background: var(--bg-primary);
   color: var(--text-body);
   transition: background 0.3s ease, color 0.3s ease;
+}
+
+/* ========== ADDITIONAL DARK MODE STYLES ========== */
+/* Dark Mode Styles */
+.dark-mode {
+  --bg-color: #1a1a2e;
+  --card-bg: #16213e;
+  --text-color: #ffffff;
+  --border-color: #2c3e50;
+}
+
+.dark-mode body {
+  background-color: #1a1a2e;
+  color: #ffffff;
+}
+
+.dark-mode .card,
+.dark-mode .inc-card,
+.dark-mode .t-card,
+.dark-mode .ad-card,
+.dark-mode .inc-chart-card,
+.dark-mode .inc-bar-card {
+  background-color: #16213e !important;
+  border-color: #2c3e50 !important;
+  color: #ffffff !important;
+}
+
+.dark-mode input,
+.dark-mode select,
+.dark-mode textarea {
+  background-color: #0f3460 !important;
+  color: #ffffff !important;
+  border-color: #2c3e50 !important;
+}
+
+.dark-mode button {
+  background-color: #0f3460 !important;
+  color: #ffffff !important;
+}
+
+.dark-mode .inc-kpi,
+.dark-mode .ad-kpi {
+  background-color: #16213e !important;
+  border-color: #2c3e50 !important;
+}
+
+.dark-mode table {
+  color: #ffffff !important;
+}
+
+.dark-mode th,
+.dark-mode td {
+  border-color: #2c3e50 !important;
 }
