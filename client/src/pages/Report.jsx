@@ -2,13 +2,14 @@
 import { useState, useEffect, useMemo } from "react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
 } from "recharts";
 import {
   FiZap, FiDroplet, FiWifi, FiGrid, FiDollarSign, FiTrendingUp,
   FiDownload, FiCheckCircle, FiAlertTriangle, FiInfo,
 } from "react-icons/fi";
+import { useTheme } from "../context/ThemeContext";
 
 /* ─── Font ─── */
 if (!document.getElementById("db-font")) {
@@ -38,36 +39,23 @@ if (!document.getElementById("rpt-anim")) {
   document.head.appendChild(s);
 }
 
-/* ════ TOKENS ════ */
-const C = {
-  page:"#f3f4f8", card:"#fff", hover:"#f0f2f7", surface2:"#f8fafc",
-  ink:"#0f172a", body:"#334155", muted:"#64748b", faint:"#94a3b8",
-  border:"#e2e8f0", borderB:"#cbd5e1",
-  blue:"#2563eb", blueL:"#eff6ff", blueM:"#bfdbfe",
-  teal:"#0891b2", tealL:"#ecfeff", tealM:"#a5f3fc",
-  green:"#059669", greenL:"#ecfdf5", greenM:"#a7f3d0",
-  amber:"#d97706", amberL:"#fffbeb", amberM:"#fde68a",
-  red:"#dc2626",   redL:"#fef2f2",   redM:"#fecaca",
-  violet:"#7c3aed",violetL:"#f5f3ff",violetM:"#ddd6fe",
-  indigo:"#4f46e5",indigoL:"#eef2ff",indigoM:"#c7d2fe",
-  s1:"0 1px 3px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04)",
-  s2:"0 4px 16px rgba(15,23,42,.08),0 2px 4px rgba(15,23,42,.04)",
-  s3:"0 12px 40px rgba(15,23,42,.10),0 4px 8px rgba(15,23,42,.04)",
-};
 const F = "'Plus Jakarta Sans',-apple-system,sans-serif";
-const ax = { fill:C.faint, fontSize:11, fontFamily:F };
 
-/* ── Utility meta ── */
-const UTIL_META = {
+/* ── Utility meta (colors will be updated from C inside component) ── */
+const getUtilMeta = (C) => ({
   Electricity: { color:C.amber,  bg:C.amberL,  bdr:C.amberM,  chartColor:C.amber,  icon:(s)=><FiZap size={s}/>,     flatRate:false },
   Water:       { color:C.teal,   bg:C.tealL,   bdr:C.tealM,   chartColor:C.teal,   icon:(s)=><FiDroplet size={s}/>, flatRate:false },
   Internet:    { color:C.indigo, bg:C.indigoL, bdr:C.indigoM, chartColor:C.indigo, icon:(s)=><FiWifi size={s}/>,    flatRate:true  },
-};
-const UTILITIES = Object.keys(UTIL_META);
+});
+const UTILITIES = ["Electricity", "Water", "Internet"];
 
-/* ════ CUSTOM TOOLTIP ════ */
-const CustomTooltip = ({ active, payload, label, prefix="" }) => {
+// Month order - defined once at top level
+const MONTH_ORDER = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+
+/* ════ CUSTOM TOOLTIP - now accepts colors as prop ════ */
+const CustomTooltip = ({ active, payload, label, prefix = "", colors }) => {
   if (!active || !payload?.length) return null;
+  const C = colors;
   return (
     <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:10,
       padding:"10px 14px", boxShadow:C.s3, fontFamily:F, minWidth:150 }}>
@@ -86,8 +74,70 @@ const CustomTooltip = ({ active, payload, label, prefix="" }) => {
   );
 };
 
+/* ════ TOGGLE GROUP - now accepts colors as prop ════ */
+const ToggleGroup = ({ options, value, onChange, colors }) => {
+  const C = colors;
+  return (
+    <div style={{ display:"flex", background:C.card, border:`1px solid ${C.border}`,
+      borderRadius:9, padding:3, gap:2 }}>
+      {options.map(opt => (
+        <button key={opt} className="r-toggle"
+          onClick={() => onChange(opt)}
+          style={{ padding:"5px 12px", borderRadius:7, border:"none", fontFamily:F,
+            fontSize:"0.78rem", fontWeight:600, cursor:"pointer", transition:"all .15s",
+            background: value === opt ? C.blueL : "transparent",
+            color:       value === opt ? C.blue  : C.muted }}>
+          {opt}
+        </button>
+      ))}
+    </div>
+  );
+};
+
 /* ════ MAIN COMPONENT ════ */
 const Report = () => {
+  const { darkMode } = useTheme();
+
+  // ⭐ C is now INSIDE the component - reacts to darkMode
+  const C = {
+    page:    darkMode ? "#0f172a" : "#f3f4f8",
+    card:    darkMode ? "#1e293b" : "#ffffff",
+    hover:   darkMode ? "#334155" : "#f0f2f7",
+    surface2:darkMode ? "#1e293b" : "#f8fafc",
+    ink:     darkMode ? "#f1f5f9" : "#0f172a",
+    body:    darkMode ? "#cbd5e1" : "#334155",
+    muted:   darkMode ? "#94a3b8" : "#64748b",
+    faint:   darkMode ? "#64748b" : "#94a3b8",
+    border:  darkMode ? "#334155" : "#e2e8f0",
+    borderB: darkMode ? "#475569" : "#cbd5e1",
+    blue:    "#2563eb",
+    blueL:   darkMode ? "rgba(37,99,235,0.15)"  : "#eff6ff",
+    blueM:   darkMode ? "#1e3a8a"               : "#bfdbfe",
+    teal:    "#0891b2",
+    tealL:   darkMode ? "rgba(8,145,178,0.15)" : "#ecfeff",
+    tealM:   darkMode ? "#164e63"               : "#a5f3fc",
+    green:   "#059669",
+    greenL:  darkMode ? "rgba(5,150,105,0.15)"  : "#ecfdf5",
+    greenM:  darkMode ? "#064e3b"               : "#a7f3d0",
+    amber:   "#d97706",
+    amberL:  darkMode ? "rgba(217,119,6,0.15)"  : "#fffbeb",
+    amberM:  darkMode ? "#78350f"               : "#fde68a",
+    red:     "#dc2626",
+    redL:    darkMode ? "rgba(220,38,38,0.15)"  : "#fef2f2",
+    redM:    darkMode ? "#7f1d1d"               : "#fecaca",
+    violet:  "#7c3aed",
+    violetL: darkMode ? "rgba(124,58,237,0.15)" : "#f5f3ff",
+    violetM: darkMode ? "#4c1d95"               : "#ddd6fe",
+    indigo:  "#4f46e5",
+    indigoL: darkMode ? "rgba(79,70,229,0.15)"  : "#eef2ff",
+    indigoM: darkMode ? "#312e81"               : "#c7d2fe",
+    s1: "0 1px 3px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04)",
+    s2: "0 4px 16px rgba(15,23,42,.08),0 2px 4px rgba(15,23,42,.04)",
+    s3: "0 12px 40px rgba(15,23,42,.10),0 4px 8px rgba(15,23,42,.04)",
+  };
+
+  // Get utility meta with current C
+  const UTIL_META = getUtilMeta(C);
 
   const [billsData] = useState([
     { id:1,  utilityType:"Electricity", billingMonth:"June 2025",      unitsUsed:320, billAmount:2750 },
@@ -104,7 +154,6 @@ const Report = () => {
     { id:12, utilityType:"Water",       billingMonth:"November 2025",  unitsUsed:20,  billAmount:800  },
     { id:13, utilityType:"Electricity", billingMonth:"December 2025",  unitsUsed:340, billAmount:2900 },
     { id:14, utilityType:"Water",       billingMonth:"December 2025",  unitsUsed:22,  billAmount:860  },
-    // ── Internet (flat-rate) ──
     { id:15, utilityType:"Internet",    billingMonth:"June 2025",      unitsUsed:0,   billAmount:3500 },
     { id:16, utilityType:"Internet",    billingMonth:"July 2025",      unitsUsed:0,   billAmount:3500 },
     { id:17, utilityType:"Internet",    billingMonth:"August 2025",    unitsUsed:0,   billAmount:4200 },
@@ -114,7 +163,6 @@ const Report = () => {
     { id:21, utilityType:"Internet",    billingMonth:"December 2025",  unitsUsed:0,   billAmount:4200 },
   ]);
 
-  // "All" replaces "Both" now that there are 3 utilities
   const [utilityFilter,    setUtilityFilter]    = useState("All");
   const [timeRange,        setTimeRange]        = useState("Yearly");
   const [selectedMonth,    setSelectedMonth]    = useState("November 2025");
@@ -125,20 +173,15 @@ const Report = () => {
   const [animatedValues,   setAnimatedValues]   = useState({ units:0, amount:0, avg:0 });
   const rowsPerPage = 5;
 
-  const monthOrder = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-
-  /* ── Derived filter helpers ── */
-  // Which utility types are currently active
   const activeTypes = useMemo(() =>
     utilityFilter === "All" ? UTILITIES : [utilityFilter],
   [utilityFilter]);
 
   const isFlat = utilityFilter !== "All" && UTIL_META[utilityFilter]?.flatRate;
 
-  /* ── Available time selectors ── */
   const availableMonths = useMemo(() =>
     [...new Set(billsData.map(b => b.billingMonth))].sort((a,b) =>
-      monthOrder.indexOf(a.split(" ")[0]) - monthOrder.indexOf(b.split(" ")[0])),
+      MONTH_ORDER.indexOf(a.split(" ")[0]) - MONTH_ORDER.indexOf(b.split(" ")[0])),
   [billsData]);
 
   const availableQuarters = useMemo(() => {
@@ -158,7 +201,6 @@ const Report = () => {
   const availableYears = useMemo(() =>
     [...new Set(billsData.map(b => b.billingMonth.split(" ")[1]))].sort(), [billsData]);
 
-  /* ── Filtered data ── */
   const filteredData = useMemo(() => {
     let f = [...billsData];
     if (utilityFilter !== "All") f = f.filter(b => b.utilityType === utilityFilter);
@@ -174,8 +216,6 @@ const Report = () => {
     return f;
   }, [billsData, utilityFilter, timeRange, selectedMonth, selectedQuarter, selectedYear]);
 
-  /* ── Summary metrics ──
-     For Internet (flat-rate) totalUnits is meaningless — show bill count instead */
   const summaryMetrics = useMemo(() => {
     if (!filteredData.length) return { totalUnits:0, totalAmount:0, avgMonthlyCost:0, highestConsumptionMonth:"N/A" };
     const totalUnits  = isFlat ? filteredData.length : filteredData.reduce((s,b) => s+b.unitsUsed, 0);
@@ -200,22 +240,19 @@ const Report = () => {
     requestAnimationFrame(tick);
   }, [summaryMetrics]);
 
-  /* ── Chart: usage over time ──
-     Internet has no units — only shown in amount chart, not usage chart */
   const usageOverTimeData = useMemo(() => {
     const data = {};
     billsData.forEach(bill => {
       if (!activeTypes.includes(bill.utilityType)) return;
-      if (bill.utilityType === "Internet") return; // flat-rate, skip usage chart
+      if (bill.utilityType === "Internet") return;
       const key = bill.billingMonth;
       if (!data[key]) data[key] = { month:bill.billingMonth.split(" ")[0] };
       if (utilityFilter === "All") data[key][bill.utilityType] = bill.unitsUsed;
       else data[key].units = bill.unitsUsed;
     });
-    return Object.values(data).sort((a,b) => monthOrder.indexOf(a.month)-monthOrder.indexOf(b.month));
+    return Object.values(data).sort((a,b) => MONTH_ORDER.indexOf(a.month)-MONTH_ORDER.indexOf(b.month));
   }, [billsData, utilityFilter, activeTypes]);
 
-  /* ── Chart: monthly expenses — includes Internet ── */
   const monthlyExpensesData = useMemo(() => {
     const data = {};
     billsData.forEach(bill => {
@@ -225,10 +262,9 @@ const Report = () => {
       data[m].expenses += bill.billAmount;
       data[m][bill.utilityType] += bill.billAmount;
     });
-    return Object.values(data).sort((a,b) => monthOrder.indexOf(a.month)-monthOrder.indexOf(b.month));
+    return Object.values(data).sort((a,b) => MONTH_ORDER.indexOf(a.month)-MONTH_ORDER.indexOf(b.month));
   }, [billsData, activeTypes]);
 
-  /* ── Chart: distribution pie — 3 slices when "All" ── */
   const utilityDistributionData = useMemo(() => {
     if (utilityFilter !== "All") return [];
     return UTILITIES.map(t => ({
@@ -236,9 +272,8 @@ const Report = () => {
       value: billsData.filter(b => b.utilityType===t).reduce((s,b) => s+b.billAmount, 0),
       color: UTIL_META[t].chartColor,
     })).filter(d => d.value > 0);
-  }, [billsData, utilityFilter]);
+  }, [billsData, utilityFilter, UTIL_META]);
 
-  /* ── Table ── */
   const tableData = useMemo(() => {
     const sorted = [...filteredData].sort((a,b) => {
       if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction==="ascending" ? -1 : 1;
@@ -264,19 +299,17 @@ const Report = () => {
   const handleSort = (key) =>
     setSortConfig(prev => ({ key, direction:prev.key===key && prev.direction==="ascending" ? "descending" : "ascending" }));
 
-  /* ── Insights — extended for Internet ── */
   const insights = useMemo(() => {
     const list = [];
     if (!filteredData.length) { list.push({ type:"info", text:"No data available for the selected filters." }); return list; }
 
-    // Electricity MoM
     const elecBills = filteredData.filter(b => b.utilityType==="Electricity");
     if (elecBills.length >= 2) {
-      const s = [...elecBills].sort((a,b) => monthOrder.indexOf(b.billingMonth.split(" ")[0])-monthOrder.indexOf(a.billingMonth.split(" ")[0]));
+      const s = [...elecBills].sort((a,b) => MONTH_ORDER.indexOf(b.billingMonth.split(" ")[0])-MONTH_ORDER.indexOf(a.billingMonth.split(" ")[0]));
       const latest = s[0];
       const prev   = s.find(b => {
         const [bm,by]=b.billingMonth.split(" "), [lm,ly]=latest.billingMonth.split(" ");
-        return by===ly && monthOrder.indexOf(bm)===monthOrder.indexOf(lm)-1;
+        return by===ly && MONTH_ORDER.indexOf(bm)===MONTH_ORDER.indexOf(lm)-1;
       });
       if (prev) {
         const pct = ((latest.unitsUsed-prev.unitsUsed)/prev.unitsUsed)*100;
@@ -284,10 +317,9 @@ const Report = () => {
       }
     }
 
-    // Water trend
     const waterBills = filteredData.filter(b => b.utilityType==="Water");
     if (waterBills.length >= 3) {
-      const sw = [...waterBills].sort((a,b) => monthOrder.indexOf(a.billingMonth.split(" ")[0])-monthOrder.indexOf(b.billingMonth.split(" ")[0]));
+      const sw = [...waterBills].sort((a,b) => MONTH_ORDER.indexOf(a.billingMonth.split(" ")[0])-MONTH_ORDER.indexOf(b.billingMonth.split(" ")[0]));
       let inc=true, dec=true;
       for (let i=1; i<sw.length; i++) {
         if (sw[i].unitsUsed < sw[i-1].unitsUsed) inc=false;
@@ -297,10 +329,9 @@ const Report = () => {
       else if (dec) list.push({ type:"success", text:"Water consumption has been steadily decreasing — great progress!" });
     }
 
-    // Internet plan change detection
     const netBills = filteredData.filter(b => b.utilityType==="Internet");
     if (netBills.length >= 2) {
-      const sortedNet = [...netBills].sort((a,b) => monthOrder.indexOf(a.billingMonth.split(" ")[0])-monthOrder.indexOf(b.billingMonth.split(" ")[0]));
+      const sortedNet = [...netBills].sort((a,b) => MONTH_ORDER.indexOf(a.billingMonth.split(" ")[0])-MONTH_ORDER.indexOf(b.billingMonth.split(" ")[0]));
       const changed = sortedNet.some((b,i) => i>0 && b.billAmount !== sortedNet[i-1].billAmount);
       if (changed) {
         const max = Math.max(...sortedNet.map(b=>b.billAmount));
@@ -311,7 +342,6 @@ const Report = () => {
       }
     }
 
-    // Peak expenditure (by amount, works for all types incl. Internet)
     const highest = filteredData.reduce((max,b) => b.billAmount>max.billAmount?b:max, filteredData[0]);
     list.push({ type:"info", text:`Peak expenditure was in ${highest.billingMonth} at Rs. ${highest.billAmount.toLocaleString()}.` });
 
@@ -335,32 +365,15 @@ const Report = () => {
 
   const sortArrow = (key) => sortConfig.key===key ? (sortConfig.direction==="ascending" ? " ↑" : " ↓") : "";
 
-  const ToggleGroup = ({ options, value, onChange }) => (
-    <div style={{ display:"flex", background:C.card, border:`1px solid ${C.border}`,
-      borderRadius:9, padding:3, gap:2 }}>
-      {options.map(opt => (
-        <button key={opt} className={`r-toggle${value===opt?" active":""}`}
-          onClick={() => onChange(opt)}
-          style={{ padding:"5px 12px", borderRadius:7, border:"none", fontFamily:F,
-            fontSize:"0.78rem", fontWeight:600, cursor:"pointer", transition:"all .15s",
-            background: value===opt ? C.blueL : "transparent",
-            color:       value===opt ? C.blue  : C.muted }}>
-          {opt}
-        </button>
-      ))}
-    </div>
-  );
-
   const insightStyle = {
     success: { bg:C.greenL,  bdr:C.greenM,  accent:C.green,  icon:<FiCheckCircle size={15}/> },
     warning: { bg:C.amberL,  bdr:C.amberM,  accent:C.amber,  icon:<FiAlertTriangle size={15}/> },
     info:    { bg:C.blueL,   bdr:C.blueM,   accent:C.blue,   icon:<FiInfo size={15}/> },
   };
 
-  /* ════ RENDER ════ */
   return (
     <div style={{ minHeight:"100vh", background:C.page, fontFamily:F,
-      color:C.ink, padding:"28px 32px 64px" }}>
+      color:C.ink, padding:"28px 32px 64px", transition:"background 0.3s ease, color 0.3s ease" }}>
 
       {/* HEADER */}
       <header className="r-fu r-fu1" style={{ display:"flex", alignItems:"flex-end",
@@ -386,7 +399,6 @@ const Report = () => {
       <section className="r-fu r-fu2" style={{ display:"flex", flexWrap:"wrap",
         gap:12, marginBottom:28, alignItems:"center" }}>
 
-        {/* Utility — now "All" + 3 individual options */}
         <div style={{ display:"flex", alignItems:"center", gap:10,
           background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 14px" }}>
           <label style={{ fontSize:"0.68rem", fontWeight:700, textTransform:"uppercase",
@@ -394,15 +406,17 @@ const Report = () => {
           <ToggleGroup
             options={["All", ...UTILITIES]}
             value={utilityFilter}
-            onChange={v => { setUtilityFilter(v); setCurrentPage(1); }}/>
+            onChange={v => { setUtilityFilter(v); setCurrentPage(1); }}
+            colors={C}
+          />
         </div>
 
-        {/* Time Range */}
         <div style={{ display:"flex", alignItems:"center", gap:10,
           background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 14px" }}>
           <label style={{ fontSize:"0.68rem", fontWeight:700, textTransform:"uppercase",
             letterSpacing:"0.08em", color:C.muted, whiteSpace:"nowrap" }}>Time Range</label>
-          <ToggleGroup options={["Monthly","Quarterly","Yearly"]} value={timeRange} onChange={v => setTimeRange(v)}/>
+          <ToggleGroup options={["Monthly","Quarterly","Yearly"]} value={timeRange}
+            onChange={v => setTimeRange(v)} colors={C} />
         </div>
 
         {timeRange === "Monthly" && (
@@ -506,7 +520,6 @@ const Report = () => {
       <section className="r-fu r-fu4" style={{ display:"grid",
         gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:28 }}>
 
-        {/* Area chart — usage over time — hidden when Internet-only (no units) */}
         {!isFlat && (
           <div className="r-chart"
             style={{ gridColumn:"1/-1", background:C.card, border:`1px solid ${C.border}`,
@@ -546,9 +559,9 @@ const Report = () => {
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
-                <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
-                <YAxis tick={ax} axisLine={false} tickLine={false}/>
-                <Tooltip content={<CustomTooltip/>}/>
+                <XAxis dataKey="month" tick={{ fill:C.faint, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false}/>
+                <YAxis tick={{ fill:C.faint, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false}/>
+                <Tooltip content={<CustomTooltip colors={C}/>}/>
                 {(utilityFilter==="All"||utilityFilter==="Electricity") &&
                   <Area type="monotone" dataKey="Electricity" stroke={C.amber} strokeWidth={2} fill="url(#rgE)" dot={false}/>}
                 {(utilityFilter==="All"||utilityFilter==="Water") &&
@@ -560,7 +573,6 @@ const Report = () => {
           </div>
         )}
 
-        {/* Bar chart — monthly expenses (always shown, spans full width for Internet-only) */}
         <div className="r-chart"
           style={{ gridColumn: isFlat ? "1/-1" : "auto",
             background:C.card, border:`1px solid ${C.border}`,
@@ -573,9 +585,9 @@ const Report = () => {
           <ResponsiveContainer width="100%" height={260}>
             <BarChart data={monthlyExpensesData} barSize={22} margin={{ top:10, right:10, left:0, bottom:0 }}>
               <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
-              <XAxis dataKey="month" tick={ax} axisLine={false} tickLine={false}/>
-              <YAxis tick={ax} axisLine={false} tickLine={false}/>
-              <Tooltip content={<CustomTooltip prefix="Rs. "/>}/>
+              <XAxis dataKey="month" tick={{ fill:C.faint, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false}/>
+              <YAxis tick={{ fill:C.faint, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false}/>
+              <Tooltip content={<CustomTooltip prefix="Rs. " colors={C}/>}/>
               {utilityFilter === "All" ? (
                 <>
                   <Bar dataKey="Electricity" name="Electricity" stackId="a" fill={C.amber}  radius={[0,0,0,0]}/>
@@ -595,7 +607,6 @@ const Report = () => {
           </ResponsiveContainer>
         </div>
 
-        {/* Pie chart — 3-way distribution when "All" */}
         {utilityFilter === "All" && (
           <div className="r-chart"
             style={{ background:C.card, border:`1px solid ${C.border}`,
@@ -725,7 +736,6 @@ const Report = () => {
               </table>
             </div>
 
-            {/* Pagination */}
             <div style={{ display:"flex", alignItems:"center", justifyContent:"center",
               gap:10, marginTop:18, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
               <button className="r-pageBtn"
@@ -739,7 +749,7 @@ const Report = () => {
               </button>
               <div style={{ display:"flex", gap:4 }}>
                 {Array.from({ length:totalPages }).map((_,i) => (
-                  <button key={i} className={`r-pageDot${currentPage===i+1?" active":""}`}
+                  <button key={i} className="r-pageDot"
                     onClick={() => setCurrentPage(i+1)}
                     style={{ width:30, height:30, borderRadius:7, border:`1px solid ${C.border}`,
                       background: currentPage===i+1 ? C.blueL : "transparent",
