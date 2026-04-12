@@ -9,6 +9,7 @@ import authRoutes from "./routes/authRoutes.js";
 import billRoutes from "./routes/billRoutes.js";
 import tariffRoutes from "./routes/tariffRoutes.js";
 import adminRoutes  from "./routes/adminRoutes.js";
+import budgetRoutes from "./routes/budgetRoutes.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,7 +33,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/bills", billRoutes);
 app.use("/api/tariff", tariffRoutes);
 app.use("/api/admin",  adminRoutes);
-
+app.use("/api/budget", budgetRoutes);
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {

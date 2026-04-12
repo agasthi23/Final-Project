@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
 
@@ -52,12 +53,13 @@ const RootRedirect = () => {
 
 function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <Routes>
+    <ThemeProvider>
+      <AuthProvider>
+        <Router>
+          <Routes>
 
-          {/* ── Root: smart redirect based on role ── */}
-          <Route path="/" element={<RootRedirect />} />
+            {/* ── Root: smart redirect based on role ── */}
+            <Route path="/" element={<RootRedirect />} />
 
           {/* ── Public routes ── */}
           <Route path="/login"  element={<Login />} />
@@ -120,6 +122,7 @@ function App() {
         </Routes>
       </Router>
     </AuthProvider>
+    </ThemeProvider>
   );
 }
 

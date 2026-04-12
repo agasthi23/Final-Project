@@ -56,6 +56,38 @@ export const authAPI = {
   // returns: { id, name, email, role }
   getMe: () =>
     api.get("/auth/me"),
+  
+  // Salary endpoints (NEW)
+  getSalary: () =>
+    api.get("/auth/salary"),
+  updateSalary: (salary) =>
+    api.put("/auth/salary", { salary }),
+  
+  // Profile endpoints (NEW)
+  getProfile: () =>
+    api.get("/auth/profile"),
+  updateProfile: (data) => {
+    console.log("Sending update profile request:", data);
+    return api.put("/auth/profile", data);
+  },
+  
+  // Profile Picture
+  updateProfilePicture: (profilePicture) => api.put("/auth/profile-picture", { profilePicture }),
+  deleteProfilePicture: () => api.delete("/auth/profile-picture"),
+  
+  // NEW - Profile page
+  changePassword: (currentPassword, newPassword) => {
+    console.log("Sending change password request");
+    return api.put("/auth/password", { currentPassword, newPassword });
+  },
+  
+  getPreferences: () => api.get("/auth/preferences"),
+  updatePreferences: (preferences) => {
+    console.log("Sending update preferences:", preferences);
+    return api.put("/auth/preferences", preferences);
+  },
+  
+  logout: () => api.post("/auth/logout"),
 };
 
 
@@ -152,29 +184,29 @@ export const predictionAPI = {
 //  Used by: Income (Budget/Income page)
 // ─────────────────────────────────────────────
 export const budgetAPI = {
-
-  // GET /api/budget
-  // returns: [ { _id, month, electricityBudget, waterBudget, salary } ]
-  getAll: () =>
-    api.get("/budget"),
-
-  // GET /api/budget/:month
-  // e.g. month = "November 2025"
-  getByMonth: (month) =>
-    api.get(`/budget/${encodeURIComponent(month)}`),
-
-  // POST /api/budget
-  // body: { month, electricityBudget, waterBudget, salary }
-  create: (budgetData) =>
-    api.post("/budget", budgetData),
-
-  // PUT /api/budget/:id
-  update: (id, budgetData) =>
-    api.put(`/budget/${id}`, budgetData),
-
-  // DELETE /api/budget/:id
-  delete: (id) =>
-    api.delete(`/budget/${id}`),
+  // GET /api/budget - Get all budgets (legacy)
+  getAll: () => api.get("/budget"),
+  
+  // GET /api/budget/dashboard - Get auto-calculated budget dashboard
+  getDashboard: () => api.get("/budget/dashboard"),
+  
+  // GET /api/budget/summary - Get quick summary for dashboard widget
+  getSummary: () => api.get("/budget/summary"),
+  
+  // GET /api/budget/:month - Get budget by month
+  getByMonth: (month) => api.get(`/budget/${encodeURIComponent(month)}`),
+  
+  // POST /api/budget - Create new budget
+  create: (budgetData) => api.post("/budget", budgetData),
+  
+  // PUT /api/budget/:id - Update budget
+  update: (id, budgetData) => api.put(`/budget/${id}`, budgetData),
+  
+  // PUT /api/budget/salary - Update user's salary
+  updateSalary: (salary) => api.put("/budget/salary", { salary }),
+  
+  // DELETE /api/budget/:id - Delete budget
+  delete: (id) => api.delete(`/budget/${id}`),
 };
 
 
