@@ -40,23 +40,51 @@
 
 /* ── Shell ────────────────────────────────────────────────────── */
 .sidebar {
-  position: fixed;
-  top: 0; left: 0;
-  height: 100vh;
+  position: sticky;      /* ✅ Changed from relative to sticky */
+  top: 0;                /* ✅ Sticks to top of viewport */
+  height: 100vh;         /* Full viewport height */
   width: var(--sb-w);
   background: var(--sb-bg);
   font-family: var(--sb-font);
   color: var(--sb-text-hi);
-  z-index: 1000;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;      /* ✅ Allow sidebar content to scroll if needed */
+  overflow-x: hidden;
   box-shadow:
     1px 0 0 var(--sb-border),
     8px 0 48px rgba(0,0,0,0.5);
   transition:
     width 0.28s var(--sb-ease),
     transform 0.28s var(--sb-ease);
+  flex-shrink: 0;        /* ✅ Prevent sidebar from shrinking */
+}
+
+/* Custom scrollbar for sidebar */
+.sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: var(--sb-text-lo);
+  border-radius: 4px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: var(--sb-text-mid);
+}
+
+@media (max-width: 1024px) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 1000;
+  }
 }
 
 .sidebar--collapsed { width: var(--sb-collapsed); }
@@ -113,13 +141,14 @@
   color: var(--sb-text-hi);
 }
 
-/* ── Nav area — fills space, no scroll ───────────────────────── */
+/* ── Nav area — fills space, scrolls if needed ───────────────── */
 .sidebar-nav-area {
   flex: 1;
   display: flex;
   flex-direction: column;
   padding: 12px 10px 8px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .nav-section-label {
@@ -275,8 +304,7 @@
   display: flex;
   flex-direction: column;
   gap: 5px;
-  /* Never let footer grow beyond its content */
-  overflow: hidden;
+  margin-top: auto;      /* ✅ Pushes footer to bottom when content is short */
 }
 
 /* Dark mode row */
@@ -339,7 +367,6 @@
   overflow: hidden;
   width: 100%;
   box-sizing: border-box;
-  /* explicitly NOT inheriting nav-item active styles */
   background: transparent !important;
   border: none !important;
   color: inherit !important;
@@ -393,7 +420,7 @@
   text-overflow: ellipsis;
 }
 
-/* Logout — clearly visible red, fixed size, override any inherited blue */
+/* Logout button */
 .logout-btn {
   width: 30px;
   height: 30px;
@@ -409,7 +436,6 @@
   justify-content: center;
   flex-shrink: 0;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
-  /* Reset any nav-item or active styles leaking in */
   text-decoration: none;
 }
 .logout-btn svg,
@@ -434,9 +460,53 @@
 
 /* ── Responsive ───────────────────────────────────────────────── */
 @media (max-width: 1023px) {
-  .sidebar { width: var(--sb-w); }
+  .sidebar { 
+    position: fixed;
+    width: var(--sb-w); 
+  }
   .sidebar--hidden {
     transform: translateX(-100%);
     pointer-events: none;
   }
+  /* Sidebar.css - Critical styles for sticky sidebar */
+
+.sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  width: var(--sb-w);
+  background: var(--sb-bg);
+  font-family: var(--sb-font);
+  color: var(--sb-text-hi);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex-shrink: 0;
+  box-shadow: 1px 0 0 var(--sb-border), 8px 0 48px rgba(0,0,0,0.5);
+  transition: width 0.28s var(--sb-ease), transform 0.28s var(--sb-ease);
+}
+
+/* Make sure collapsed state also stays sticky */
+.sidebar--collapsed {
+  width: var(--sb-collapsed);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+/* For mobile, override sticky to fixed */
+@media (max-width: 1024px) {
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 1000;
+    height: 100vh;
+  }
+  .sidebar--hidden {
+    transform: translateX(-100%);
+    pointer-events: none;
+  }
+}
 }

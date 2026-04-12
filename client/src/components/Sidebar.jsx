@@ -80,7 +80,10 @@ const Sidebar = ({ isOpen, setIsOpen, darkMode, onToggleDarkMode, user, onLogout
         <div className="sidebar-overlay" onClick={() => setIsOpen(false)} aria-hidden="true" />
       )}
 
-      <aside className={cls} aria-label="Main navigation">
+      <aside
+        className={cls}
+        aria-label="Main navigation"
+      >
 
         <div
           className="sidebar-header"
