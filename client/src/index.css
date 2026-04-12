@@ -13,3 +13,266 @@ body,
   width: 100%;
   overflow-x: hidden;
 }
+
+/* ============================================
+   BASE LIGHT THEME
+   ============================================ */
+:root {
+  --bg-page: #f3f4f8;
+  --bg-card: #ffffff;
+  --bg-sidebar: #ffffff;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --text-muted: #94a3b8;
+  --border-color: #e2e8f0;
+  --hover-bg: #f0f2f7;
+  --input-bg: #f8fafc;
+  --background: #f3f4f8;
+  --text-dark: #0f172a;
+}
+
+/* ============================================
+   DARK MODE - Applied to html, body, and root
+   ============================================ */
+html.dark-mode,
+body.dark-mode,
+#root.dark-mode {
+  --bg-page: #0f172a !important;
+  --bg-card: #1e293b !important;
+  --bg-sidebar: #0f172a !important;
+  --text-primary: #f1f5f9 !important;
+  --text-secondary: #94a3b8 !important;
+  --text-muted: #64748b !important;
+  --border-color: #334155 !important;
+  --hover-bg: #334155 !important;
+  --input-bg: #0f172a !important;
+  --background: #0f172a;
+  --text-dark: #f1f5f9;
+}
+
+/* Apply background to the entire page */
+html.dark-mode,
+body.dark-mode,
+#root.dark-mode {
+  background-color: #0f172a !important;
+}
+
+body.dark-mode {
+  background-color: var(--bg-page) !important;
+}
+
+/* The main container should fill the entire width */
+#root {
+  background-color: var(--bg-page);
+  transition: background-color 0.3s ease;
+}
+
+/* ============================================
+   MAIN CONTENT AREA - Make it expand
+   ============================================ */
+main, .main-content, .profile-main {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+}
+
+/* ============================================
+   FIX THE WHITE BORDER - Remove any margins/paddings that cause white gaps
+   ============================================ */
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* All page containers should use the page background */
+.profile-page,
+.dashboard-page,
+.billing-page,
+.analytics-page,
+.predictions-page,
+.budget-page,
+.reports-page {
+  background-color: var(--bg-page);
+  min-height: 100vh;
+}
+
+/* ============================================
+   DARK MODE FOR CARDS & CONTAINERS
+   ============================================ */
+.dark-mode .inc-card,
+.dark-mode .t-card,
+.dark-mode .ad-card,
+.dark-mode .pf-card,
+.dark-mode .inc-chart-card,
+.dark-mode .inc-bar-card,
+.dark-mode .ad-kpi,
+.dark-mode .inc-kpi,
+.dark-mode .profile-sidebar,
+.dark-mode .card {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+}
+
+.dark-mode .inc-card p,
+.dark-mode .t-card p,
+.dark-mode .ad-card p,
+.dark-mode .pf-card p {
+  color: #94a3b8 !important;
+}
+
+/* Remove white paper effect from all pages in dark mode */
+.dark-mode .dashboard-page,
+.dark-mode .billing-page,
+.dark-mode .analytics-page,
+.dark-mode .predictions-page,
+.dark-mode .budget-page,
+.dark-mode .reports-page,
+.dark-mode .profile-page,
+.dark-mode .income-page,
+.dark-mode [class$="-page"],
+.dark-mode [class*="-page"] {
+  background-color: #0f172a !important;
+  box-shadow: none !important;
+}
+
+/* Also target any direct child wrapper divs in the main content area */
+.dark-mode main > div,
+.dark-mode .main-content > div {
+  background-color: transparent !important;
+}
+
+/* ============================================
+   DARK MODE FOR INPUTS
+   ============================================ */
+.dark-mode input,
+.dark-mode select,
+.dark-mode textarea,
+.dark-mode .field-input {
+  background-color: #0f172a !important;
+  color: #f1f5f9 !important;
+  border-color: #334155 !important;
+}
+
+.dark-mode input::placeholder {
+  color: #64748b !important;
+}
+
+/* ============================================
+   DARK MODE FOR BUTTONS
+   ============================================ */
+.dark-mode button:not(.btn--primary):not(.t-btn-save):not(.inc-export) {
+  background-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+.dark-mode .btn--secondary {
+  background-color: #1e293b !important;
+  border-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+/* ============================================
+   DARK MODE FOR TABLES
+   ============================================ */
+.dark-mode table,
+.dark-mode th,
+.dark-mode td {
+  background-color: transparent !important;
+  border-color: #334155 !important;
+  color: #f1f5f9 !important;
+}
+
+/* ============================================
+   DARK MODE FOR CHARTS
+   ============================================ */
+.dark-mode .recharts-text,
+.dark-mode .recharts-cartesian-axis-tick-value {
+  fill: #94a3b8 !important;
+}
+
+.dark-mode .recharts-cartesian-grid line {
+  stroke: #334155 !important;
+}
+
+/* ============================================
+   DARK MODE FOR SIDEBAR (if exists)
+   ============================================ */
+.dark-mode aside,
+.dark-mode .sidebar,
+.dark-mode .profile-sidebar {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+}
+
+.dark-mode .sidebar-avatar {
+  background: linear-gradient(160deg, #1e3a5f 0%, #1e293b 100%) !important;
+}
+
+.dark-mode .nav-item:hover {
+  background-color: #334155 !important;
+}
+
+.dark-mode .nav-item--active {
+  background-color: rgba(59, 130, 246, 0.2) !important;
+  color: #93c5fd !important;
+}
+
+/* ============================================
+   DARK MODE FOR TOGGLES
+   ============================================ */
+.dark-mode .toggle__track {
+  background-color: #334155 !important;
+}
+
+.dark-mode .toggle input:checked ~ .toggle__track {
+  background-color: #3b82f6 !important;
+}
+
+/* ============================================
+   DARK MODE FOR PROGRESS BARS
+   ============================================ */
+.dark-mode .pf-input,
+.dark-mode .t-input {
+  background-color: #0f172a !important;
+  color: #f1f5f9 !important;
+}
+
+/* ============================================
+   DARK MODE FOR HERO SECTION
+   ============================================ */
+.dark-mode .inc-hero,
+.dark-mode section[style*="background:#0f172a"] {
+  background: #020617 !important;
+}
+
+/* ============================================
+   SCROLLBARS IN DARK MODE
+   ============================================ */
+.dark-mode ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.dark-mode ::-webkit-scrollbar-track {
+  background: #1e293b;
+}
+
+.dark-mode ::-webkit-scrollbar-thumb {
+  background: #475569;
+  border-radius: 4px;
+}
+
+.dark-mode ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
+}
+
+/* ============================================
+   SPINNER ANIMATION
+   ============================================ */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  animation: spin 0.7s linear infinite;
+}
