@@ -35,7 +35,7 @@ if (!document.getElementById("pred-anim")) {
 
 const F = "'Plus Jakarta Sans',-apple-system,sans-serif";
 
-/* ════ INITIAL DATA ════ */
+/* ════ INITIAL DATA (Mock data - will be replaced by ML later) ════ */
 const INITIAL_BILLS = [
   { id:1,  utilityType:"Electricity", billingMonth:"June 2025",      unitsUsed:320, billAmount:2750 },
   { id:2,  utilityType:"Water",       billingMonth:"June 2025",      unitsUsed:22,  billAmount:880  },
@@ -56,6 +56,13 @@ const INITIAL_BILLS = [
   { id:17, utilityType:"Internet",    billingMonth:"October 2025",   unitsUsed:0,   billAmount:4200 },
   { id:18, utilityType:"Internet",    billingMonth:"November 2025",  unitsUsed:0,   billAmount:4200 },
 ];
+
+// Get next month for prediction
+const getNextMonth = () => {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  return next.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+};
 
 /* ════ MAIN COMPONENT ════ */
 const Prediction = () => {
@@ -104,14 +111,14 @@ const Prediction = () => {
     Internet:    { color:C.indigo, bg:C.indigoL, bdr:C.indigoM, icon:(s)=><FiWifi size={s}/>,     unit:"Flat-rate", flatRate:true },
   };
 
-  const [billsData]        = useState(INITIAL_BILLS);
-  const [selectedUtility,  setSelectedUtility]  = useState("Electricity");
+  const [billsData] = useState(INITIAL_BILLS);
+  const [selectedUtility, setSelectedUtility] = useState("Electricity");
   const [predictionMethod, setPredictionMethod] = useState("average");
 
-  const meta     = UTIL_META[selectedUtility];
+  const meta = UTIL_META[selectedUtility];
   const utilColor = meta.color;
-  const utilUnit  = meta.unit;
-  const isFlat    = meta.flatRate;
+  const utilUnit = meta.unit;
+  const isFlat = meta.flatRate;
 
   const filteredData = useMemo(
     () => billsData.filter(b => b.utilityType === selectedUtility),
@@ -200,14 +207,7 @@ const Prediction = () => {
     return { predictedUnits, predictedAmount, percentChange, amountChange, confidence, explanation };
   }, [filteredData, predictionMethod, isFlat]);
 
-  const nextMonthLabel = useMemo(() => {
-    const last = filteredData[filteredData.length-1];
-    if (!last) return "Next Month";
-    const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-    const [mn,yr] = last.billingMonth.split(" ");
-    const ni = (months.indexOf(mn)+1)%12;
-    return `${months[ni]} ${ni===0?parseInt(yr)+1:yr}`;
-  }, [filteredData]);
+  const nextMonthLabel = getNextMonth();
 
   const chartData = useMemo(() => {
     const data = filteredData.map(b => ({
@@ -297,7 +297,7 @@ const Prediction = () => {
             <span style={{ width:8, height:8, borderRadius:2, background:p.color, display:"inline-block" }}/>
             <span style={{ fontSize:"0.75rem", color:C.muted, flex:1 }}>{p.name}</span>
             <span style={{ fontSize:"0.8rem", fontWeight:700, color:C.ink }}>
-              Rs. {Number(p.value).toLocaleString()}
+              {p.name === "Usage" ? `${p.value} ${utilUnit}` : `Rs. ${p.value.toLocaleString()}`}
             </span>
           </div>
         ))}
@@ -579,7 +579,7 @@ const Prediction = () => {
                 </div>
               )}
 
-              {isFlat && (
+              {isFlat && stats.totalSpend && (
                 <div className="p-sc"
                   style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16,
                     padding:18, display:"flex", alignItems:"flex-start", gap:12, boxShadow:C.s1,
