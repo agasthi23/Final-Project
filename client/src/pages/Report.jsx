@@ -1,5 +1,5 @@
 // src/pages/Report.jsx
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -10,6 +10,7 @@ import {
   FiDownload, FiCheckCircle, FiAlertTriangle, FiInfo,
 } from "react-icons/fi";
 import { useTheme } from "../context/ThemeContext";
+import { reportsAPI } from "../services/api";
 
 /* ─── Font ─── */
 if (!document.getElementById("db-font")) {
@@ -41,18 +42,17 @@ if (!document.getElementById("rpt-anim")) {
 
 const F = "'Plus Jakarta Sans',-apple-system,sans-serif";
 
-/* ── Utility meta (colors will be updated from C inside component) ── */
 const getUtilMeta = (C) => ({
   Electricity: { color:C.amber,  bg:C.amberL,  bdr:C.amberM,  chartColor:C.amber,  icon:(s)=><FiZap size={s}/>,     flatRate:false },
   Water:       { color:C.teal,   bg:C.tealL,   bdr:C.tealM,   chartColor:C.teal,   icon:(s)=><FiDroplet size={s}/>, flatRate:false },
   Internet:    { color:C.indigo, bg:C.indigoL, bdr:C.indigoM, chartColor:C.indigo, icon:(s)=><FiWifi size={s}/>,    flatRate:true  },
 });
-const UTILITIES = ["Electricity", "Water", "Internet"];
 
-// Month order - defined once at top level
+// These are used in the component - keeping them
+const UTILITIES = ["Electricity", "Water", "Internet"];
 const MONTH_ORDER = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
-/* ════ CUSTOM TOOLTIP - now accepts colors as prop ════ */
+/* ════ CUSTOM TOOLTIP ════ */
 const CustomTooltip = ({ active, payload, label, prefix = "", colors }) => {
   if (!active || !payload?.length) return null;
   const C = colors;
@@ -74,7 +74,7 @@ const CustomTooltip = ({ active, payload, label, prefix = "", colors }) => {
   );
 };
 
-/* ════ TOGGLE GROUP - now accepts colors as prop ════ */
+/* ════ TOGGLE GROUP ════ */
 const ToggleGroup = ({ options, value, onChange, colors }) => {
   const C = colors;
   return (
@@ -98,7 +98,6 @@ const ToggleGroup = ({ options, value, onChange, colors }) => {
 const Report = () => {
   const { darkMode } = useTheme();
 
-  // ⭐ C is now INSIDE the component - reacts to darkMode
   const C = {
     page:    darkMode ? "#0f172a" : "#f3f4f8",
     card:    darkMode ? "#1e293b" : "#ffffff",
@@ -136,344 +135,253 @@ const Report = () => {
     s3: "0 12px 40px rgba(15,23,42,.10),0 4px 8px rgba(15,23,42,.04)",
   };
 
-  // Get utility meta with current C
   const UTIL_META = getUtilMeta(C);
 
-  const [billsData] = useState([
-    { id:1,  utilityType:"Electricity", billingMonth:"June 2025",      unitsUsed:320, billAmount:2750 },
-    { id:2,  utilityType:"Water",       billingMonth:"June 2025",      unitsUsed:22,  billAmount:880  },
-    { id:3,  utilityType:"Electricity", billingMonth:"July 2025",      unitsUsed:345, billAmount:2950 },
-    { id:4,  utilityType:"Water",       billingMonth:"July 2025",      unitsUsed:24,  billAmount:960  },
-    { id:5,  utilityType:"Electricity", billingMonth:"August 2025",    unitsUsed:380, billAmount:3250 },
-    { id:6,  utilityType:"Water",       billingMonth:"August 2025",    unitsUsed:26,  billAmount:1040 },
-    { id:7,  utilityType:"Electricity", billingMonth:"September 2025", unitsUsed:350, billAmount:3000 },
-    { id:8,  utilityType:"Water",       billingMonth:"September 2025", unitsUsed:23,  billAmount:920  },
-    { id:9,  utilityType:"Electricity", billingMonth:"October 2025",   unitsUsed:330, billAmount:2820 },
-    { id:10, utilityType:"Water",       billingMonth:"October 2025",   unitsUsed:21,  billAmount:840  },
-    { id:11, utilityType:"Electricity", billingMonth:"November 2025",  unitsUsed:310, billAmount:2650 },
-    { id:12, utilityType:"Water",       billingMonth:"November 2025",  unitsUsed:20,  billAmount:800  },
-    { id:13, utilityType:"Electricity", billingMonth:"December 2025",  unitsUsed:340, billAmount:2900 },
-    { id:14, utilityType:"Water",       billingMonth:"December 2025",  unitsUsed:22,  billAmount:860  },
-    { id:15, utilityType:"Internet",    billingMonth:"June 2025",      unitsUsed:0,   billAmount:3500 },
-    { id:16, utilityType:"Internet",    billingMonth:"July 2025",      unitsUsed:0,   billAmount:3500 },
-    { id:17, utilityType:"Internet",    billingMonth:"August 2025",    unitsUsed:0,   billAmount:4200 },
-    { id:18, utilityType:"Internet",    billingMonth:"September 2025", unitsUsed:0,   billAmount:4200 },
-    { id:19, utilityType:"Internet",    billingMonth:"October 2025",   unitsUsed:0,   billAmount:4200 },
-    { id:20, utilityType:"Internet",    billingMonth:"November 2025",  unitsUsed:0,   billAmount:4200 },
-    { id:21, utilityType:"Internet",    billingMonth:"December 2025",  unitsUsed:0,   billAmount:4200 },
-  ]);
+  // ── State
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  
+  // Filters
+  const [utilityFilter, setUtilityFilter] = useState("All");
+  const [timeRange, setTimeRange] = useState("Yearly");
+  const [selectedMonth, setSelectedMonth] = useState("");
+  const [selectedQuarter, setSelectedQuarter] = useState("");
+  const [selectedYear, setSelectedYear] = useState("");
+  
+  // Filter options
+  const [filterOptions, setFilterOptions] = useState({
+    utilities: ["All", "Electricity", "Water", "Internet"],
+    months: [],
+    quarters: [],
+    years: []
+  });
+  
+  // Data
+  const [summaryData, setSummaryData] = useState({
+    totalUnits: 0,
+    totalAmount: 0,
+    avgMonthlyCost: 0,
+    peakExpenditure: { month: "N/A", amount: 0, utility: "N/A" }
+  });
+  const [consumptionData, setConsumptionData] = useState([]);
+  const [expensesData, setExpensesData] = useState([]);
+  const [distributionData, setDistributionData] = useState([]);
+  const [recordsData, setRecordsData] = useState({ records: [], pagination: { total: 0, page: 1, pages: 1 } });
+  const [insightsData, setInsightsData] = useState([]);
+  
+  const [currentPage, setCurrentPage] = useState(1);
+  const [sortConfig, setSortConfig] = useState({ key: "month", direction: "descending" });
+  const [animatedValues, setAnimatedValues] = useState({ units: 0, amount: 0, avg: 0 });
+  const rowsPerPage = 10;
 
-  const [utilityFilter,    setUtilityFilter]    = useState("All");
-  const [timeRange,        setTimeRange]        = useState("Yearly");
-  const [selectedMonth,    setSelectedMonth]    = useState("November 2025");
-  const [selectedQuarter,  setSelectedQuarter]  = useState("Q4 2025");
-  const [selectedYear,     setSelectedYear]     = useState("2025");
-  const [currentPage,      setCurrentPage]      = useState(1);
-  const [sortConfig,       setSortConfig]       = useState({ key:"billingMonth", direction:"ascending" });
-  const [animatedValues,   setAnimatedValues]   = useState({ units:0, amount:0, avg:0 });
-  const rowsPerPage = 5;
-
-  const activeTypes = useMemo(() =>
-    utilityFilter === "All" ? UTILITIES : [utilityFilter],
-  [utilityFilter]);
-
+  // Now define isFlat AFTER utilityFilter is declared
   const isFlat = utilityFilter !== "All" && UTIL_META[utilityFilter]?.flatRate;
 
-  const availableMonths = useMemo(() =>
-    [...new Set(billsData.map(b => b.billingMonth))].sort((a,b) =>
-      MONTH_ORDER.indexOf(a.split(" ")[0]) - MONTH_ORDER.indexOf(b.split(" ")[0])),
-  [billsData]);
+  // Build query params
+  const getQueryParams = useCallback(() => {
+    const params = { utility: utilityFilter, timeRange };
+    if (timeRange === "Monthly" && selectedMonth) params.month = selectedMonth;
+    else if (timeRange === "Quarterly" && selectedQuarter) params.quarter = selectedQuarter;
+    else if (timeRange === "Yearly" && selectedYear) params.year = selectedYear;
+    return params;
+  }, [utilityFilter, timeRange, selectedMonth, selectedQuarter, selectedYear]);
 
-  const availableQuarters = useMemo(() => {
-    const quarters = new Set();
-    billsData.forEach(bill => {
-      const [month, year] = bill.billingMonth.split(" ");
-      let q;
-      if (["January","February","March"].includes(month))         q = `Q1 ${year}`;
-      else if (["April","May","June"].includes(month))            q = `Q2 ${year}`;
-      else if (["July","August","September"].includes(month))     q = `Q3 ${year}`;
-      else if (["October","November","December"].includes(month)) q = `Q4 ${year}`;
-      quarters.add(q);
-    });
-    return Array.from(quarters).sort();
-  }, [billsData]);
-
-  const availableYears = useMemo(() =>
-    [...new Set(billsData.map(b => b.billingMonth.split(" ")[1]))].sort(), [billsData]);
-
-  const filteredData = useMemo(() => {
-    let f = [...billsData];
-    if (utilityFilter !== "All") f = f.filter(b => b.utilityType === utilityFilter);
-    if (timeRange === "Monthly") {
-      f = f.filter(b => b.billingMonth === selectedMonth);
-    } else if (timeRange === "Quarterly") {
-      const [q, yr] = selectedQuarter.split(" ");
-      const qMonths = { Q1:["January","February","March"], Q2:["April","May","June"], Q3:["July","August","September"], Q4:["October","November","December"] };
-      f = f.filter(b => { const [m,y] = b.billingMonth.split(" "); return y===yr && qMonths[q].includes(m); });
-    } else {
-      f = f.filter(b => b.billingMonth.includes(selectedYear));
+  // Fetch all data
+  const fetchAllData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const params = getQueryParams();
+    
+    try {
+      const [summaryRes, consumptionRes, expensesRes, distributionRes, recordsRes, insightsRes] = await Promise.all([
+        reportsAPI.getSummary(params),
+        reportsAPI.getConsumption({ utility: utilityFilter, year: selectedYear }),
+        reportsAPI.getExpenses({ utility: utilityFilter, year: selectedYear }),
+        reportsAPI.getDistribution({ year: selectedYear }),
+        reportsAPI.getRecords({ ...params, page: currentPage, limit: rowsPerPage, sort: sortConfig.direction === "ascending" ? "asc" : "desc" }),
+        reportsAPI.getInsights({ year: selectedYear })
+      ]);
+      
+      if (summaryRes.data?.success) setSummaryData(summaryRes.data.summary);
+      if (consumptionRes.data?.success) setConsumptionData(consumptionRes.data.data);
+      if (expensesRes.data?.success) setExpensesData(expensesRes.data.data);
+      if (distributionRes.data?.success) setDistributionData(distributionRes.data.data);
+      if (recordsRes.data?.success) setRecordsData(recordsRes.data);
+      if (insightsRes.data?.success) setInsightsData(insightsRes.data.insights);
+      
+      // Animate KPI values
+      const { totalUnits, totalAmount, avgMonthlyCost } = summaryRes.data?.summary || { totalUnits: 0, totalAmount: 0, avgMonthlyCost: 0 };
+      const start = Date.now(), duration = 800;
+      const tick = () => {
+        const elapsed = Date.now() - start, progress = Math.min(elapsed / duration, 1);
+        const ease = 1 - Math.pow(1 - progress, 3);
+        setAnimatedValues({
+          units: Math.round(totalUnits * ease),
+          amount: Math.round(totalAmount * ease),
+          avg: Math.round(avgMonthlyCost * ease)
+        });
+        if (progress < 1) requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+      
+    } catch (err) {
+      console.error("Fetch data error:", err);
+      setError("Failed to load report data. Please try again.");
+    } finally {
+      setLoading(false);
     }
-    return f;
-  }, [billsData, utilityFilter, timeRange, selectedMonth, selectedQuarter, selectedYear]);
+  }, [getQueryParams, utilityFilter, selectedYear, currentPage, sortConfig]);
 
-  const summaryMetrics = useMemo(() => {
-    if (!filteredData.length) return { totalUnits:0, totalAmount:0, avgMonthlyCost:0, highestConsumptionMonth:"N/A" };
-    const totalUnits  = isFlat ? filteredData.length : filteredData.reduce((s,b) => s+b.unitsUsed, 0);
-    const totalAmount = filteredData.reduce((s,b) => s+b.billAmount, 0);
-    let avgMonthlyCost;
-    if (timeRange === "Monthly")        avgMonthlyCost = totalAmount;
-    else if (timeRange === "Quarterly") avgMonthlyCost = totalAmount / 3;
-    else { const months = new Set(filteredData.map(b => b.billingMonth)).size; avgMonthlyCost = totalAmount / months; }
-    const highest = filteredData.reduce((max,b) => b.billAmount > max.billAmount ? b : max, filteredData[0]);
-    return { totalUnits, totalAmount, avgMonthlyCost:Math.round(avgMonthlyCost), highestConsumptionMonth:highest.billingMonth };
-  }, [filteredData, timeRange, isFlat]);
+ // Fetch filter options on mount
+useEffect(() => {
+  const fetchFilters = async () => {
+    try {
+      const res = await reportsAPI.getFilters();
+      if (res.data?.success) {
+        const filters = res.data.filters;
+        setFilterOptions({
+          // ✅ Force include Internet if missing
+          utilities: filters.utilities?.includes("Internet") 
+            ? filters.utilities 
+            : ["All", "Electricity", "Water", "Internet"],
+          months: filters.months || [],
+          quarters: filters.quarters || [],
+          years: filters.years || []
+        });
+        if (filters.years?.length) setSelectedYear(filters.years[filters.years.length - 1]);
+        if (filters.months?.length) setSelectedMonth(filters.months[filters.months.length - 1]);
+        if (filters.quarters?.length) setSelectedQuarter(filters.quarters[filters.quarters.length - 1]);
+      }
+    } catch (err) {
+      console.error("Fetch filters error:", err);
+    }
+  };
+  fetchFilters();
+}, []);
 
+  // Fetch data when dependencies change
   useEffect(() => {
-    const start = Date.now(), duration = 800;
-    const { totalUnits, totalAmount, avgMonthlyCost } = summaryMetrics;
-    const tick = () => {
-      const elapsed = Date.now()-start, progress = Math.min(elapsed/duration, 1);
-      const ease = 1-Math.pow(1-progress, 3);
-      setAnimatedValues({ units:Math.round(totalUnits*ease), amount:Math.round(totalAmount*ease), avg:Math.round(avgMonthlyCost*ease) });
-      if (progress < 1) requestAnimationFrame(tick);
-    };
-    requestAnimationFrame(tick);
-  }, [summaryMetrics]);
-
-  const usageOverTimeData = useMemo(() => {
-    const data = {};
-    billsData.forEach(bill => {
-      if (!activeTypes.includes(bill.utilityType)) return;
-      if (bill.utilityType === "Internet") return;
-      const key = bill.billingMonth;
-      if (!data[key]) data[key] = { month:bill.billingMonth.split(" ")[0] };
-      if (utilityFilter === "All") data[key][bill.utilityType] = bill.unitsUsed;
-      else data[key].units = bill.unitsUsed;
-    });
-    return Object.values(data).sort((a,b) => MONTH_ORDER.indexOf(a.month)-MONTH_ORDER.indexOf(b.month));
-  }, [billsData, utilityFilter, activeTypes]);
-
-  const monthlyExpensesData = useMemo(() => {
-    const data = {};
-    billsData.forEach(bill => {
-      if (!activeTypes.includes(bill.utilityType)) return;
-      const m = bill.billingMonth.split(" ")[0];
-      if (!data[m]) data[m] = { month:m, expenses:0, Electricity:0, Water:0, Internet:0 };
-      data[m].expenses += bill.billAmount;
-      data[m][bill.utilityType] += bill.billAmount;
-    });
-    return Object.values(data).sort((a,b) => MONTH_ORDER.indexOf(a.month)-MONTH_ORDER.indexOf(b.month));
-  }, [billsData, activeTypes]);
-
-  const utilityDistributionData = useMemo(() => {
-    if (utilityFilter !== "All") return [];
-    return UTILITIES.map(t => ({
-      name: t,
-      value: billsData.filter(b => b.utilityType===t).reduce((s,b) => s+b.billAmount, 0),
-      color: UTIL_META[t].chartColor,
-    })).filter(d => d.value > 0);
-  }, [billsData, utilityFilter, UTIL_META]);
-
-  const tableData = useMemo(() => {
-    const sorted = [...filteredData].sort((a,b) => {
-      if (a[sortConfig.key] < b[sortConfig.key]) return sortConfig.direction==="ascending" ? -1 : 1;
-      if (a[sortConfig.key] > b[sortConfig.key]) return sortConfig.direction==="ascending" ?  1 : -1;
-      return 0;
-    });
-    return sorted.map((bill,i) => {
-      let usageChange = 0;
-      if (!isFlat && i > 0 && bill.utilityType === sorted[i-1].utilityType) {
-        const prev = sorted[i-1].unitsUsed;
-        if (prev > 0) usageChange = ((bill.unitsUsed-prev)/prev)*100;
-      }
-      return { ...bill, usageChange:usageChange.toFixed(1) };
-    });
-  }, [filteredData, sortConfig, isFlat]);
-
-  const paginatedData = useMemo(() => {
-    const start = (currentPage-1)*rowsPerPage;
-    return tableData.slice(start, start+rowsPerPage);
-  }, [tableData, currentPage]);
-  const totalPages = Math.ceil(tableData.length/rowsPerPage);
-
-  const handleSort = (key) =>
-    setSortConfig(prev => ({ key, direction:prev.key===key && prev.direction==="ascending" ? "descending" : "ascending" }));
-
-  const insights = useMemo(() => {
-    const list = [];
-    if (!filteredData.length) { list.push({ type:"info", text:"No data available for the selected filters." }); return list; }
-
-    const elecBills = filteredData.filter(b => b.utilityType==="Electricity");
-    if (elecBills.length >= 2) {
-      const s = [...elecBills].sort((a,b) => MONTH_ORDER.indexOf(b.billingMonth.split(" ")[0])-MONTH_ORDER.indexOf(a.billingMonth.split(" ")[0]));
-      const latest = s[0];
-      const prev   = s.find(b => {
-        const [bm,by]=b.billingMonth.split(" "), [lm,ly]=latest.billingMonth.split(" ");
-        return by===ly && MONTH_ORDER.indexOf(bm)===MONTH_ORDER.indexOf(lm)-1;
-      });
-      if (prev) {
-        const pct = ((latest.unitsUsed-prev.unitsUsed)/prev.unitsUsed)*100;
-        list.push({ type:pct>0?"warning":"success", text:`Electricity usage ${pct>0?"increased":"decreased"} by ${Math.abs(pct).toFixed(1)}% compared to last month.` });
-      }
+    if (selectedYear || selectedMonth || selectedQuarter) {
+      fetchAllData();
     }
+  }, [fetchAllData, selectedYear, selectedMonth, selectedQuarter, utilityFilter, timeRange, currentPage, sortConfig]);
 
-    const waterBills = filteredData.filter(b => b.utilityType==="Water");
-    if (waterBills.length >= 3) {
-      const sw = [...waterBills].sort((a,b) => MONTH_ORDER.indexOf(a.billingMonth.split(" ")[0])-MONTH_ORDER.indexOf(b.billingMonth.split(" ")[0]));
-      let inc=true, dec=true;
-      for (let i=1; i<sw.length; i++) {
-        if (sw[i].unitsUsed < sw[i-1].unitsUsed) inc=false;
-        if (sw[i].unitsUsed > sw[i-1].unitsUsed) dec=false;
-      }
-      if (inc) list.push({ type:"warning", text:"Water consumption has been steadily increasing over the selected period." });
-      else if (dec) list.push({ type:"success", text:"Water consumption has been steadily decreasing — great progress!" });
-    }
-
-    const netBills = filteredData.filter(b => b.utilityType==="Internet");
-    if (netBills.length >= 2) {
-      const sortedNet = [...netBills].sort((a,b) => MONTH_ORDER.indexOf(a.billingMonth.split(" ")[0])-MONTH_ORDER.indexOf(b.billingMonth.split(" ")[0]));
-      const changed = sortedNet.some((b,i) => i>0 && b.billAmount !== sortedNet[i-1].billAmount);
-      if (changed) {
-        const max = Math.max(...sortedNet.map(b=>b.billAmount));
-        const min = Math.min(...sortedNet.map(b=>b.billAmount));
-        list.push({ type:"info", text:`Internet plan charges varied between Rs. ${min.toLocaleString()} and Rs. ${max.toLocaleString()} — a possible plan upgrade occurred.` });
-      } else {
-        list.push({ type:"success", text:`Internet bill has been consistent at Rs. ${sortedNet[0].billAmount.toLocaleString()} — no plan changes detected.` });
-      }
-    }
-
-    const highest = filteredData.reduce((max,b) => b.billAmount>max.billAmount?b:max, filteredData[0]);
-    list.push({ type:"info", text:`Peak expenditure was in ${highest.billingMonth} at Rs. ${highest.billAmount.toLocaleString()}.` });
-
-    return list;
-  }, [filteredData]);
+  const handleSort = (key) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === "ascending" ? "descending" : "ascending"
+    }));
+    setCurrentPage(1);
+  };
 
   const exportToCSV = () => {
     const rows = [
-      [`Report — ${timeRange==="Monthly"?selectedMonth:timeRange==="Quarterly"?selectedQuarter:selectedYear}`],
+      [`Report — ${timeRange === "Monthly" ? selectedMonth : timeRange === "Quarterly" ? selectedQuarter : selectedYear}`],
       [],
-      ["Utility Type","Billing Month","Units Used","Bill Amount (Rs.)"],
-      ...filteredData.map(b => [b.utilityType, b.billingMonth, b.utilityType==="Internet"?"Flat-rate":b.unitsUsed, b.billAmount]),
+      ["Utility Type", "Month", "Units Used", "Bill Amount (Rs.)"],
+      ...recordsData.records.map(r => [r.utility, r.month, r.unitsUsed === null ? "Flat-rate" : r.unitsUsed, r.billAmount])
     ];
-    const csv  = rows.map(r => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type:"text/csv;charset=utf-8;" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href=url; a.download=`utility_report_${new Date().toISOString().split("T")[0]}.csv`;
-    a.style.display="none"; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    const csv = rows.map(r => r.join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `utility_report_${new Date().toISOString().split("T")[0]}.csv`;
+    a.style.display = "none"; document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
-  const sortArrow = (key) => sortConfig.key===key ? (sortConfig.direction==="ascending" ? " ↑" : " ↓") : "";
+  const sortArrow = (key) => sortConfig.key === key ? (sortConfig.direction === "ascending" ? " ↑" : " ↓") : "";
 
   const insightStyle = {
-    success: { bg:C.greenL,  bdr:C.greenM,  accent:C.green,  icon:<FiCheckCircle size={15}/> },
-    warning: { bg:C.amberL,  bdr:C.amberM,  accent:C.amber,  icon:<FiAlertTriangle size={15}/> },
-    info:    { bg:C.blueL,   bdr:C.blueM,   accent:C.blue,   icon:<FiInfo size={15}/> },
+    success: { bg: C.greenL, bdr: C.greenM, accent: C.green, icon: <FiCheckCircle size={15}/> },
+    warning: { bg: C.amberL, bdr: C.amberM, accent: C.amber, icon: <FiAlertTriangle size={15}/> },
+    info: { bg: C.blueL, bdr: C.blueM, accent: C.blue, icon: <FiInfo size={15}/> }
   };
 
+  if (loading && !summaryData.totalAmount) {
+    return (
+      <div style={{ minHeight: "100vh", background: C.page, fontFamily: F, padding: "28px 32px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, color: C.muted }}>
+          <div style={{ width: 18, height: 18, border: `2px solid ${C.border}`, borderTopColor: C.blue, borderRadius: "50%", animation: "spin 0.7s linear infinite" }}/>
+          Loading report data...
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={{ minHeight: "100vh", background: C.page, fontFamily: F, padding: "28px 32px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 18px", borderRadius: 12, background: C.redL, border: `1px solid ${C.redM}`, color: C.red, fontSize: "0.875rem" }}>
+          <FiAlertTriangle size={16}/>
+          <div style={{ flex: 1 }}>{error}</div>
+          <button onClick={fetchAllData} style={{ padding: "5px 12px", borderRadius: 7, border: `1px solid ${C.redM}`, background: "transparent", color: C.red, cursor: "pointer" }}>Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  const totalPages = recordsData.pagination?.pages || 1;
+
   return (
-    <div style={{ minHeight:"100vh", background:C.page, fontFamily:F,
-      color:C.ink, padding:"28px 32px 64px", transition:"background 0.3s ease, color 0.3s ease" }}>
+    <div style={{ minHeight: "100vh", background: C.page, fontFamily: F, color: C.ink, padding: "28px 32px 64px", transition: "background 0.3s ease, color 0.3s ease" }}>
 
       {/* HEADER */}
-      <header className="r-fu r-fu1" style={{ display:"flex", alignItems:"flex-end",
-        justifyContent:"space-between", marginBottom:28, paddingBottom:24,
-        borderBottom:`1px solid ${C.border}`, flexWrap:"wrap", gap:16 }}>
+      <header className="r-fu r-fu1" style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginBottom: 28, paddingBottom: 24, borderBottom: `1px solid ${C.border}`, flexWrap: "wrap", gap: 16 }}>
         <div>
-          <h1 style={{ fontSize:"1.75rem", fontWeight:800, color:C.ink,
-            margin:"0 0 5px", letterSpacing:"-0.03em" }}>Utility Reports</h1>
-          <p style={{ fontSize:"0.875rem", color:C.muted, margin:0 }}>
-            Track, analyze, and optimize your consumption patterns
-          </p>
+          <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: C.ink, margin: "0 0 5px", letterSpacing: "-0.03em" }}>Utility Reports</h1>
+          <p style={{ fontSize: "0.875rem", color: C.muted, margin: 0 }}>Track, analyze, and optimize your consumption patterns</p>
         </div>
-        <button className="r-export" onClick={exportToCSV}
-          style={{ display:"flex", alignItems:"center", gap:8, padding:"10px 18px",
-            borderRadius:9, background:C.card, border:`1px solid ${C.borderB}`,
-            color:C.muted, fontFamily:F, fontSize:"0.8rem", fontWeight:600,
-            cursor:"pointer", transition:"all .18s", whiteSpace:"nowrap" }}>
+        <button className="r-export" onClick={exportToCSV} style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 18px", borderRadius: 9, background: C.card, border: `1px solid ${C.borderB}`, color: C.muted, fontFamily: F, fontSize: "0.8rem", fontWeight: 600, cursor: "pointer", transition: "all .18s", whiteSpace: "nowrap" }}>
           <FiDownload size={14}/> Export CSV
         </button>
       </header>
 
       {/* FILTERS */}
-      <section className="r-fu r-fu2" style={{ display:"flex", flexWrap:"wrap",
-        gap:12, marginBottom:28, alignItems:"center" }}>
-
-        <div style={{ display:"flex", alignItems:"center", gap:10,
-          background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 14px" }}>
-          <label style={{ fontSize:"0.68rem", fontWeight:700, textTransform:"uppercase",
-            letterSpacing:"0.08em", color:C.muted, whiteSpace:"nowrap" }}>Utility</label>
-          <ToggleGroup
-            options={["All", ...UTILITIES]}
-            value={utilityFilter}
-            onChange={v => { setUtilityFilter(v); setCurrentPage(1); }}
-            colors={C}
-          />
+      <section className="r-fu r-fu2" style={{ display: "flex", flexWrap: "wrap", gap: 12, marginBottom: 28, alignItems: "center" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 14px" }}>
+          <label style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.muted, whiteSpace: "nowrap" }}>Utility</label>
+          <ToggleGroup options={filterOptions.utilities} value={utilityFilter} onChange={v => { setUtilityFilter(v); setCurrentPage(1); }} colors={C} />
         </div>
 
-        <div style={{ display:"flex", alignItems:"center", gap:10,
-          background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 14px" }}>
-          <label style={{ fontSize:"0.68rem", fontWeight:700, textTransform:"uppercase",
-            letterSpacing:"0.08em", color:C.muted, whiteSpace:"nowrap" }}>Time Range</label>
-          <ToggleGroup options={["Monthly","Quarterly","Yearly"]} value={timeRange}
-            onChange={v => setTimeRange(v)} colors={C} />
+        <div style={{ display: "flex", alignItems: "center", gap: 10, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 14px" }}>
+          <label style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.muted, whiteSpace: "nowrap" }}>Time Range</label>
+          <ToggleGroup options={["Monthly", "Quarterly", "Yearly"]} value={timeRange} onChange={setTimeRange} colors={C} />
         </div>
 
-        {timeRange === "Monthly" && (
-          <div style={{ display:"flex", alignItems:"center", gap:10,
-            background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 14px" }}>
-            <label style={{ fontSize:"0.68rem", fontWeight:700, textTransform:"uppercase",
-              letterSpacing:"0.08em", color:C.muted }}>Month</label>
-            <div style={{ position:"relative" }}>
-              <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
-                style={{ background:"transparent", border:"none", color:C.body,
-                  fontFamily:F, fontSize:"0.82rem", fontWeight:500,
-                  cursor:"pointer", outline:"none", padding:"2px 20px 2px 4px", appearance:"none" }}>
-                {availableMonths.map(m => <option key={m}>{m}</option>)}
+        {timeRange === "Monthly" && filterOptions.months.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 14px" }}>
+            <label style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.muted }}>Month</label>
+            <div style={{ position: "relative" }}>
+              <select value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} style={{ background: "transparent", border: "none", color: C.body, fontFamily: F, fontSize: "0.82rem", fontWeight: 500, cursor: "pointer", outline: "none", padding: "2px 20px 2px 4px", appearance: "none" }}>
+                {filterOptions.months.map(m => <option key={m}>{m}</option>)}
               </select>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.faint}
-                strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                style={{ position:"absolute", right:0, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
                 <polyline points="6 9 12 15 18 9"/>
               </svg>
             </div>
           </div>
         )}
-        {timeRange === "Quarterly" && (
-          <div style={{ display:"flex", alignItems:"center", gap:10,
-            background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 14px" }}>
-            <label style={{ fontSize:"0.68rem", fontWeight:700, textTransform:"uppercase",
-              letterSpacing:"0.08em", color:C.muted }}>Quarter</label>
-            <div style={{ position:"relative" }}>
-              <select value={selectedQuarter} onChange={e => setSelectedQuarter(e.target.value)}
-                style={{ background:"transparent", border:"none", color:C.body,
-                  fontFamily:F, fontSize:"0.82rem", fontWeight:500,
-                  cursor:"pointer", outline:"none", padding:"2px 20px 2px 4px", appearance:"none" }}>
-                {availableQuarters.map(q => <option key={q}>{q}</option>)}
+        {timeRange === "Quarterly" && filterOptions.quarters.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 14px" }}>
+            <label style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.muted }}>Quarter</label>
+            <div style={{ position: "relative" }}>
+              <select value={selectedQuarter} onChange={e => setSelectedQuarter(e.target.value)} style={{ background: "transparent", border: "none", color: C.body, fontFamily: F, fontSize: "0.82rem", fontWeight: 500, cursor: "pointer", outline: "none", padding: "2px 20px 2px 4px", appearance: "none" }}>
+                {filterOptions.quarters.map(q => <option key={q}>{q}</option>)}
               </select>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.faint}
-                strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                style={{ position:"absolute", right:0, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
                 <polyline points="6 9 12 15 18 9"/>
               </svg>
             </div>
           </div>
         )}
-        {timeRange === "Yearly" && (
-          <div style={{ display:"flex", alignItems:"center", gap:10,
-            background:C.card, border:`1px solid ${C.border}`, borderRadius:10, padding:"8px 14px" }}>
-            <label style={{ fontSize:"0.68rem", fontWeight:700, textTransform:"uppercase",
-              letterSpacing:"0.08em", color:C.muted }}>Year</label>
-            <div style={{ position:"relative" }}>
-              <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)}
-                style={{ background:"transparent", border:"none", color:C.body,
-                  fontFamily:F, fontSize:"0.82rem", fontWeight:500,
-                  cursor:"pointer", outline:"none", padding:"2px 20px 2px 4px", appearance:"none" }}>
-                {availableYears.map(y => <option key={y}>{y}</option>)}
+        {timeRange === "Yearly" && filterOptions.years.length > 0 && (
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "8px 14px" }}>
+            <label style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.muted }}>Year</label>
+            <div style={{ position: "relative" }}>
+              <select value={selectedYear} onChange={e => setSelectedYear(e.target.value)} style={{ background: "transparent", border: "none", color: C.body, fontFamily: F, fontSize: "0.82rem", fontWeight: 500, cursor: "pointer", outline: "none", padding: "2px 20px 2px 4px", appearance: "none" }}>
+                {filterOptions.years.map(y => <option key={y}>{y}</option>)}
               </select>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.faint}
-                strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-                style={{ position:"absolute", right:0, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.faint} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
                 <polyline points="6 9 12 15 18 9"/>
               </svg>
             </div>
@@ -482,162 +390,103 @@ const Report = () => {
       </section>
 
       {/* KPI CARDS */}
-      <section className="r-fu r-fu3" style={{ display:"grid",
-        gridTemplateColumns:"repeat(4,1fr)", gap:16, marginBottom:28 }}>
+      <section className="r-fu r-fu3" style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 28 }}>
         {[
-          {
-            label: isFlat ? "Bills Recorded" : "Total Units Consumed",
-            value: isFlat ? `${animatedValues.units} bills` : animatedValues.units.toLocaleString(),
-            sub:   utilityFilter==="All" ? "All utilities" : utilityFilter,
-            icon:  <FiZap size={18}/>, accent:C.amber, bg:C.amberL, bdr:C.amberM,
-          },
-          { label:"Total Amount Spent",   value:`Rs. ${animatedValues.amount.toLocaleString()}`, sub:`${timeRange} period`,   icon:<FiGrid size={18}/>,       accent:C.teal,   bg:C.tealL,   bdr:C.tealM   },
-          { label:"Avg Monthly Cost",     value:`Rs. ${animatedValues.avg.toLocaleString()}`,    sub:"Calculated average",    icon:<FiDollarSign size={18}/>, accent:C.violet, bg:C.violetL, bdr:C.violetM },
-          { label:"Peak Expenditure",     value:summaryMetrics.highestConsumptionMonth,          sub:"Highest spend period",  icon:<FiTrendingUp size={18}/>, accent:C.red,    bg:C.redL,    bdr:C.redM    },
-        ].map((k,i) => (
-          <div key={i} className="r-kpi"
-            style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:14,
-              padding:"20px 22px", display:"flex", gap:16, alignItems:"flex-start",
-              position:"relative", overflow:"hidden", boxShadow:C.s1,
-              transition:"transform .2s ease, box-shadow .2s ease" }}>
-            <div style={{ position:"absolute", top:0, left:0, right:0, height:3,
-              background:`linear-gradient(90deg,${k.accent},transparent)`, borderRadius:"14px 14px 0 0" }}/>
-            <div style={{ width:40, height:40, borderRadius:10, display:"flex",
-              alignItems:"center", justifyContent:"center", flexShrink:0,
-              background:k.bg, color:k.accent }}>{k.icon}</div>
+          { label: isFlat ? "Bills Recorded" : "Total Units Consumed", value: isFlat ? `${animatedValues.units} bills` : animatedValues.units.toLocaleString(), sub: utilityFilter === "All" ? "All utilities" : utilityFilter, icon: <FiZap size={18}/>, accent: C.amber, bg: C.amberL, bdr: C.amberM },
+          { label: "Total Amount Spent", value: `Rs. ${animatedValues.amount.toLocaleString()}`, sub: `${timeRange} period`, icon: <FiGrid size={18}/>, accent: C.teal, bg: C.tealL, bdr: C.tealM },
+          { label: "Avg Monthly Cost", value: `Rs. ${animatedValues.avg.toLocaleString()}`, sub: "Calculated average", icon: <FiDollarSign size={18}/>, accent: C.violet, bg: C.violetL, bdr: C.violetM },
+          { label: "Peak Expenditure", value: summaryData.peakExpenditure?.month || "N/A", sub: "Highest spend period", icon: <FiTrendingUp size={18}/>, accent: C.red, bg: C.redL, bdr: C.redM },
+        ].map((k, i) => (
+          <div key={i} className="r-kpi" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "20px 22px", display: "flex", gap: 16, alignItems: "flex-start", position: "relative", overflow: "hidden", boxShadow: C.s1, transition: "transform .2s ease, box-shadow .2s ease" }}>
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: `linear-gradient(90deg,${k.accent},transparent)`, borderRadius: "14px 14px 0 0" }}/>
+            <div style={{ width: 40, height: 40, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: k.bg, color: k.accent }}>{k.icon}</div>
             <div>
-              <p style={{ fontSize:"0.68rem", fontWeight:700, textTransform:"uppercase",
-                letterSpacing:"0.07em", color:C.muted, margin:"0 0 5px" }}>{k.label}</p>
-              <p style={{ fontSize:"1.35rem", fontWeight:800, color:C.ink,
-                margin:"0 0 3px", letterSpacing:"-0.02em" }}>{k.value}</p>
-              <p style={{ fontSize:"0.7rem", color:C.faint, margin:0 }}>{k.sub}</p>
+              <p style={{ fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: C.muted, margin: "0 0 5px" }}>{k.label}</p>
+              <p style={{ fontSize: "1.35rem", fontWeight: 800, color: C.ink, margin: "0 0 3px", letterSpacing: "-0.02em" }}>{k.value}</p>
+              <p style={{ fontSize: "0.7rem", color: C.faint, margin: 0 }}>{k.sub}</p>
             </div>
           </div>
         ))}
       </section>
 
       {/* CHARTS GRID */}
-      <section className="r-fu r-fu4" style={{ display:"grid",
-        gridTemplateColumns:"1fr 1fr", gap:20, marginBottom:28 }}>
-
-        {!isFlat && (
-          <div className="r-chart"
-            style={{ gridColumn:"1/-1", background:C.card, border:`1px solid ${C.border}`,
-              borderRadius:14, padding:"22px 24px 18px", boxShadow:C.s1,
-              transition:"transform .2s ease, box-shadow .2s ease" }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start",
-              flexWrap:"wrap", gap:12, marginBottom:18 }}>
+      <section className="r-fu r-fu4" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 28 }}>
+        {!isFlat && consumptionData.length > 0 && (
+          <div className="r-chart" style={{ gridColumn: "1/-1", background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "22px 24px 18px", boxShadow: C.s1, transition: "transform .2s ease, box-shadow .2s ease" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
               <div>
-                <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>Consumption Over Time</h3>
-                <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>Monthly unit usage across utilities</p>
+                <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: C.ink, margin: "0 0 3px" }}>Consumption Over Time</h3>
+                <p style={{ fontSize: "0.72rem", color: C.muted, margin: 0 }}>Monthly unit usage across utilities</p>
               </div>
-              <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
-                {(utilityFilter==="All"||utilityFilter==="Electricity") && (
-                  <span style={{ display:"flex", alignItems:"center", gap:5, fontSize:"0.72rem", color:C.muted }}>
-                    <span style={{ width:8, height:8, borderRadius:"50%", background:C.amber, display:"inline-block" }}/>
-                    Electricity
-                  </span>
-                )}
-                {(utilityFilter==="All"||utilityFilter==="Water") && (
-                  <span style={{ display:"flex", alignItems:"center", gap:5, fontSize:"0.72rem", color:C.muted }}>
-                    <span style={{ width:8, height:8, borderRadius:"50%", background:C.teal, display:"inline-block" }}/>
-                    Water
-                  </span>
-                )}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                {(utilityFilter === "All" || utilityFilter === "Electricity") && <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.72rem", color: C.muted }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: C.amber, display: "inline-block" }}/> Electricity</span>}
+                {(utilityFilter === "All" || utilityFilter === "Water") && <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: "0.72rem", color: C.muted }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: C.teal, display: "inline-block" }}/> Water</span>}
               </div>
             </div>
             <ResponsiveContainer width="100%" height={260}>
-              <AreaChart data={usageOverTimeData} margin={{ top:10, right:20, left:0, bottom:0 }}>
+              <AreaChart data={consumptionData} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
                 <defs>
-                  <linearGradient id="rgE" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={C.amber} stopOpacity={0.15}/>
-                    <stop offset="95%" stopColor={C.amber} stopOpacity={0}/>
-                  </linearGradient>
-                  <linearGradient id="rgW" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%"  stopColor={C.teal} stopOpacity={0.15}/>
-                    <stop offset="95%" stopColor={C.teal} stopOpacity={0}/>
-                  </linearGradient>
+                  <linearGradient id="rgE" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.amber} stopOpacity={0.15}/><stop offset="95%" stopColor={C.amber} stopOpacity={0}/></linearGradient>
+                  <linearGradient id="rgW" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={C.teal} stopOpacity={0.15}/><stop offset="95%" stopColor={C.teal} stopOpacity={0}/></linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
-                <XAxis dataKey="month" tick={{ fill:C.faint, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false}/>
-                <YAxis tick={{ fill:C.faint, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false}/>
+                <XAxis dataKey="month" tick={{ fill: C.faint, fontSize: 11, fontFamily: F }} axisLine={false} tickLine={false}/>
+                <YAxis tick={{ fill: C.faint, fontSize: 11, fontFamily: F }} axisLine={false} tickLine={false}/>
                 <Tooltip content={<CustomTooltip colors={C}/>}/>
-                {(utilityFilter==="All"||utilityFilter==="Electricity") &&
-                  <Area type="monotone" dataKey="Electricity" stroke={C.amber} strokeWidth={2} fill="url(#rgE)" dot={false}/>}
-                {(utilityFilter==="All"||utilityFilter==="Water") &&
-                  <Area type="monotone" dataKey="Water" stroke={C.teal} strokeWidth={2} fill="url(#rgW)" dot={false}/>}
-                {utilityFilter !== "All" &&
-                  <Area type="monotone" dataKey="units" name="Units Used" stroke={C.amber} strokeWidth={2} fill="url(#rgE)" dot={false}/>}
+                {(utilityFilter === "All" || utilityFilter === "Electricity") && <Area type="monotone" dataKey="Electricity" stroke={C.amber} strokeWidth={2} fill="url(#rgE)" dot={false}/>}
+                {(utilityFilter === "All" || utilityFilter === "Water") && <Area type="monotone" dataKey="Water" stroke={C.teal} strokeWidth={2} fill="url(#rgW)" dot={false}/>}
+                {utilityFilter !== "All" && <Area type="monotone" dataKey="units" name="Units Used" stroke={C.amber} strokeWidth={2} fill="url(#rgE)" dot={false}/>}
               </AreaChart>
             </ResponsiveContainer>
           </div>
         )}
 
-        <div className="r-chart"
-          style={{ gridColumn: isFlat ? "1/-1" : "auto",
-            background:C.card, border:`1px solid ${C.border}`,
-            borderRadius:14, padding:"22px 24px 18px", boxShadow:C.s1,
-            transition:"transform .2s ease, box-shadow .2s ease" }}>
-          <div style={{ marginBottom:18 }}>
-            <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>Monthly Expenses</h3>
-            <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>Total spend per month (Rs.)</p>
+        <div className="r-chart" style={{ gridColumn: isFlat ? "1/-1" : "auto", background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "22px 24px 18px", boxShadow: C.s1, transition: "transform .2s ease, box-shadow .2s ease" }}>
+          <div style={{ marginBottom: 18 }}>
+            <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: C.ink, margin: "0 0 3px" }}>Monthly Expenses</h3>
+            <p style={{ fontSize: "0.72rem", color: C.muted, margin: 0 }}>Total spend per month (Rs.)</p>
           </div>
           <ResponsiveContainer width="100%" height={260}>
-            <BarChart data={monthlyExpensesData} barSize={22} margin={{ top:10, right:10, left:0, bottom:0 }}>
+            <BarChart data={expensesData} barSize={22} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
-              <XAxis dataKey="month" tick={{ fill:C.faint, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false}/>
-              <YAxis tick={{ fill:C.faint, fontSize:11, fontFamily:F }} axisLine={false} tickLine={false}/>
+              <XAxis dataKey="month" tick={{ fill: C.faint, fontSize: 11, fontFamily: F }} axisLine={false} tickLine={false}/>
+              <YAxis tick={{ fill: C.faint, fontSize: 11, fontFamily: F }} axisLine={false} tickLine={false}/>
               <Tooltip content={<CustomTooltip prefix="Rs. " colors={C}/>}/>
               {utilityFilter === "All" ? (
                 <>
-                  <Bar dataKey="Electricity" name="Electricity" stackId="a" fill={C.amber}  radius={[0,0,0,0]}/>
-                  <Bar dataKey="Water"       name="Water"       stackId="a" fill={C.teal}   radius={[0,0,0,0]}/>
-                  <Bar dataKey="Internet"    name="Internet"    stackId="a" fill={C.indigo} radius={[4,4,0,0]}/>
+                  <Bar dataKey="Electricity" name="Electricity" stackId="a" fill={C.amber} radius={[0,0,0,0]}/>
+                  <Bar dataKey="Water" name="Water" stackId="a" fill={C.teal} radius={[0,0,0,0]}/>
+                  <Bar dataKey="Internet" name="Internet" stackId="a" fill={C.indigo} radius={[4,4,0,0]}/>
                 </>
               ) : (
-                <Bar dataKey="expenses" name="Expenses"
-                  fill={UTIL_META[utilityFilter]?.chartColor || C.blue} radius={[4,4,0,0]}>
-                  {monthlyExpensesData.map((_,i) => {
-                    const base = UTIL_META[utilityFilter]?.chartColor || C.blue;
-                    return <Cell key={i} fill={`${base}${Math.round(102+153*(i/monthlyExpensesData.length)).toString(16)}`}/>;
-                  })}
-                </Bar>
+                <Bar dataKey="expenses" name="Expenses" fill={UTIL_META[utilityFilter]?.chartColor || C.blue} radius={[4,4,0,0]}/>
               )}
             </BarChart>
           </ResponsiveContainer>
         </div>
 
-        {utilityFilter === "All" && (
-          <div className="r-chart"
-            style={{ background:C.card, border:`1px solid ${C.border}`,
-              borderRadius:14, padding:"22px 24px 18px", boxShadow:C.s1,
-              transition:"transform .2s ease, box-shadow .2s ease" }}>
-            <div style={{ marginBottom:18 }}>
-              <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>Spend Distribution</h3>
-              <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>Total cost by utility type</p>
+        {utilityFilter === "All" && distributionData.length > 0 && (
+          <div className="r-chart" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "22px 24px 18px", boxShadow: C.s1, transition: "transform .2s ease, box-shadow .2s ease" }}>
+            <div style={{ marginBottom: 18 }}>
+              <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: C.ink, margin: "0 0 3px" }}>Spend Distribution</h3>
+              <p style={{ fontSize: "0.72rem", color: C.muted, margin: 0 }}>Total cost by utility type</p>
             </div>
-            <div style={{ display:"flex", alignItems:"center", gap:24 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
               <ResponsiveContainer width="100%" height={220}>
                 <PieChart>
-                  <Pie data={utilityDistributionData} cx="50%" cy="50%"
-                    innerRadius={60} outerRadius={90}
-                    dataKey="value" startAngle={90} endAngle={-270} paddingAngle={3}>
-                    {utilityDistributionData.map((e,i) => <Cell key={i} fill={e.color} stroke="none"/>)}
+                  <Pie data={distributionData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} dataKey="value" startAngle={90} endAngle={-270} paddingAngle={3}>
+                    {distributionData.map((e, i) => <Cell key={i} fill={e.color || [C.amber, C.teal, C.indigo][i % 3]} stroke="none"/>)}
                   </Pie>
-                  <Tooltip formatter={v => [`Rs. ${v.toLocaleString()}`, "Spend"]}
-                    contentStyle={{ background:C.card, border:`1px solid ${C.border}`,
-                      borderRadius:9, color:C.ink, boxShadow:C.s3, fontFamily:F }}/>
+                  <Tooltip formatter={v => [`Rs. ${v.toLocaleString()}`, "Spend"]} contentStyle={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 9, color: C.ink, boxShadow: C.s3, fontFamily: F }}/>
                 </PieChart>
               </ResponsiveContainer>
-              <div style={{ display:"flex", flexDirection:"column", gap:16, flex:1 }}>
-                {utilityDistributionData.map((d,i) => (
-                  <div key={i} style={{ display:"flex", alignItems:"center", gap:10 }}>
-                    <span style={{ width:10, height:10, borderRadius:"50%",
-                      background:d.color, flexShrink:0 }}/>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16, flex: 1 }}>
+                {distributionData.map((d, i) => (
+                  <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ width: 10, height: 10, borderRadius: "50%", background: d.color || [C.amber, C.teal, C.indigo][i % 3], flexShrink: 0 }}/>
                     <div>
-                      <p style={{ fontSize:"0.75rem", color:C.muted, margin:"0 0 2px", fontWeight:500 }}>{d.name}</p>
-                      <p style={{ fontSize:"0.9rem", fontWeight:700, color:C.body,
-                        margin:0, fontFamily:"monospace" }}>Rs. {d.value.toLocaleString()}</p>
+                      <p style={{ fontSize: "0.75rem", color: C.muted, margin: "0 0 2px", fontWeight: 500 }}>{d.name}</p>
+                      <p style={{ fontSize: "0.9rem", fontWeight: 700, color: C.body, margin: 0, fontFamily: "monospace" }}>Rs. {d.value.toLocaleString()}</p>
                     </div>
                   </div>
                 ))}
@@ -648,84 +497,55 @@ const Report = () => {
       </section>
 
       {/* DATA TABLE */}
-      <section className="r-fu r-fu4" style={{ background:C.card, border:`1px solid ${C.border}`,
-        borderRadius:14, padding:"22px 24px", marginBottom:28, boxShadow:C.s1 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center",
-          marginBottom:18, flexWrap:"wrap", gap:12 }}>
+      <section className="r-fu r-fu4" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "22px 24px", marginBottom: 28, boxShadow: C.s1 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18, flexWrap: "wrap", gap: 12 }}>
           <div>
-            <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>Detailed Records</h3>
-            <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{filteredData.length} entries found</p>
+            <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: C.ink, margin: "0 0 3px" }}>Detailed Records</h3>
+            <p style={{ fontSize: "0.72rem", color: C.muted, margin: 0 }}>{recordsData.pagination?.total || 0} entries found</p>
           </div>
         </div>
 
-        {filteredData.length === 0 ? (
-          <div style={{ display:"flex", flexDirection:"column", alignItems:"center",
-            justifyContent:"center", padding:"60px 20px", gap:12, color:C.muted }}>
-            <span style={{ fontSize:"2rem" }}>📂</span>
-            <p style={{ fontSize:"0.875rem", margin:0 }}>No records match the current filters.</p>
+        {recordsData.records.length === 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "60px 20px", gap: 12, color: C.muted }}>
+            <span style={{ fontSize: "2rem" }}>📂</span>
+            <p style={{ fontSize: "0.875rem", margin: 0 }}>No records match the current filters.</p>
           </div>
         ) : (
           <>
-            <div style={{ overflowX:"auto" }}>
-              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <thead>
                   <tr>
-                    {[["billingMonth","Month"],["utilityType","Utility"],["unitsUsed","Units Used"],["billAmount","Bill Amount"],["usageChange","Change"]].map(([key,label]) => (
-                      <th key={key} className="r-th"
-                        onClick={() => handleSort(key)}
-                        style={{ padding:"10px 14px", textAlign:"left", fontSize:"0.68rem",
-                          fontWeight:700, textTransform:"uppercase", letterSpacing:"0.08em",
-                          color:C.muted, borderBottom:`1px solid ${C.border}`,
-                          cursor:"pointer", userSelect:"none", whiteSpace:"nowrap",
-                          transition:"color .15s", fontFamily:F }}>
+                    {[["month", "Month"], ["utility", "Utility"], ["unitsUsed", "Units Used"], ["billAmount", "Bill Amount"], ["change", "Change"]].map(([key, label]) => (
+                      <th key={key} className="r-th" onClick={() => handleSort(key)} style={{ padding: "10px 14px", textAlign: "left", fontSize: "0.68rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: C.muted, borderBottom: `1px solid ${C.border}`, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap", transition: "color .15s", fontFamily: F }}>
                         {label}
-                        <span style={{ color:C.amber, marginLeft:4 }}>{sortArrow(key)}</span>
+                        <span style={{ color: C.amber, marginLeft: 4 }}>{sortArrow(key)}</span>
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {paginatedData.map(bill => {
-                    const m = UTIL_META[bill.utilityType] || UTIL_META.Electricity;
-                    const isNetBill = bill.utilityType === "Internet";
+                  {recordsData.records.map((record, idx) => {
+                    const isNetBill = record.utility === "Internet";
+                    const m = UTIL_META[record.utility] || UTIL_META.Electricity;
                     return (
-                      <tr key={bill.id} className="r-tr" style={{ transition:"background .15s" }}>
-                        <td style={{ padding:"13px 14px", fontSize:"0.82rem", color:C.body,
-                          borderBottom:`1px solid ${C.border}`, verticalAlign:"middle" }}>
-                          <span style={{ fontFamily:"monospace", fontSize:"0.78rem", color:C.muted }}>
-                            {bill.billingMonth}
+                      <tr key={idx} className="r-tr" style={{ transition: "background .15s", borderBottom: `1px solid ${C.border}` }}>
+                        <td style={{ padding: "13px 14px", fontSize: "0.82rem", color: C.body, verticalAlign: "middle" }}>
+                          <span style={{ fontFamily: "monospace", fontSize: "0.78rem", color: C.muted }}>{record.month}</span>
+                        </td>
+                        <td style={{ padding: "13px 14px", fontSize: "0.82rem", color: C.body, verticalAlign: "middle" }}>
+                          <span style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 20, fontSize: "0.75rem", fontWeight: 600, background: m.bg, color: m.color }}>
+                            {m.icon(11)} {record.utility}
                           </span>
                         </td>
-                        <td style={{ padding:"13px 14px", fontSize:"0.82rem", color:C.body,
-                          borderBottom:`1px solid ${C.border}`, verticalAlign:"middle" }}>
-                          <span style={{ display:"inline-flex", alignItems:"center", gap:5,
-                            padding:"3px 10px", borderRadius:20, fontSize:"0.75rem", fontWeight:600,
-                            background:m.bg, color:m.color }}>
-                            {m.icon(11)} {bill.utilityType}
-                          </span>
+                        <td style={{ padding: "13px 14px", fontSize: "0.82rem", color: C.body, verticalAlign: "middle" }}>
+                          {isNetBill ? <span style={{ fontSize: "0.78rem", color: C.faint, fontStyle: "italic" }}>Flat-rate</span> : <><strong>{record.unitsUsed}</strong> units</>}
                         </td>
-                        <td style={{ padding:"13px 14px", fontSize:"0.82rem", color:C.body,
-                          borderBottom:`1px solid ${C.border}`, verticalAlign:"middle" }}>
-                          {isNetBill
-                            ? <span style={{ fontSize:"0.78rem", color:C.faint, fontStyle:"italic" }}>Flat-rate</span>
-                            : <><strong>{bill.unitsUsed}</strong> units</>}
-                        </td>
-                        <td style={{ padding:"13px 14px", fontSize:"0.82rem",
-                          borderBottom:`1px solid ${C.border}`, verticalAlign:"middle",
-                          fontFamily:"monospace", color:C.ink, fontWeight:500 }}>
-                          Rs. {bill.billAmount.toLocaleString()}
-                        </td>
-                        <td style={{ padding:"13px 14px", fontSize:"0.82rem",
-                          borderBottom:`1px solid ${C.border}`, verticalAlign:"middle" }}>
-                          {isNetBill ? (
-                            <span style={{ fontSize:"0.75rem", color:C.faint, fontStyle:"italic" }}>—</span>
-                          ) : (
-                            <span style={{ display:"inline-flex", alignItems:"center", gap:3,
-                              padding:"3px 9px", borderRadius:20, fontSize:"0.75rem",
-                              fontWeight:600, fontFamily:"monospace",
-                              background: bill.usageChange > 0 ? C.redL  : bill.usageChange < 0 ? C.greenL : C.hover,
-                              color:      bill.usageChange > 0 ? C.red   : bill.usageChange < 0 ? C.green  : C.muted }}>
-                              {bill.usageChange > 0 ? "↑" : bill.usageChange < 0 ? "↓" : "–"} {Math.abs(bill.usageChange)}%
+                        <td style={{ padding: "13px 14px", fontSize: "0.82rem", verticalAlign: "middle", fontFamily: "monospace", color: C.ink, fontWeight: 500 }}>Rs. {record.billAmount.toLocaleString()}</td>
+                        <td style={{ padding: "13px 14px", fontSize: "0.82rem", verticalAlign: "middle" }}>
+                          {isNetBill ? <span style={{ fontSize: "0.75rem", color: C.faint, fontStyle: "italic" }}>—</span> : (
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: 3, padding: "3px 9px", borderRadius: 20, fontSize: "0.75rem", fontWeight: 600, fontFamily: "monospace", background: parseFloat(record.change) > 0 ? C.redL : parseFloat(record.change) < 0 ? C.greenL : C.hover, color: parseFloat(record.change) > 0 ? C.red : parseFloat(record.change) < 0 ? C.green : C.muted }}>
+                              {parseFloat(record.change) > 0 ? "↑" : parseFloat(record.change) < 0 ? "↓" : "–"} {Math.abs(parseFloat(record.change))}%
                             </span>
                           )}
                         </td>
@@ -736,66 +556,36 @@ const Report = () => {
               </table>
             </div>
 
-            <div style={{ display:"flex", alignItems:"center", justifyContent:"center",
-              gap:10, marginTop:18, paddingTop:16, borderTop:`1px solid ${C.border}` }}>
-              <button className="r-pageBtn"
-                onClick={() => setCurrentPage(p => Math.max(p-1,1))}
-                disabled={currentPage===1}
-                style={{ padding:"7px 14px", borderRadius:7, border:`1px solid ${C.border}`,
-                  background:"transparent", color:C.muted, fontFamily:F, fontSize:"0.78rem",
-                  cursor:currentPage===1?"not-allowed":"pointer",
-                  opacity:currentPage===1?0.3:1, transition:"all .15s" }}>
-                ← Prev
-              </button>
-              <div style={{ display:"flex", gap:4 }}>
-                {Array.from({ length:totalPages }).map((_,i) => (
-                  <button key={i} className="r-pageDot"
-                    onClick={() => setCurrentPage(i+1)}
-                    style={{ width:30, height:30, borderRadius:7, border:`1px solid ${C.border}`,
-                      background: currentPage===i+1 ? C.blueL : "transparent",
-                      color:      currentPage===i+1 ? C.blue  : C.muted,
-                      borderColor:currentPage===i+1 ? C.blue  : C.border,
-                      fontFamily:F, fontSize:"0.78rem", cursor:"pointer",
-                      display:"flex", alignItems:"center", justifyContent:"center",
-                      transition:"all .15s" }}>
-                    {i+1}
-                  </button>
-                ))}
+            {totalPages > 1 && (
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 10, marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+                <button className="r-pageBtn" onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} style={{ padding: "7px 14px", borderRadius: 7, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontFamily: F, fontSize: "0.78rem", cursor: currentPage === 1 ? "not-allowed" : "pointer", opacity: currentPage === 1 ? 0.3 : 1, transition: "all .15s" }}>← Prev</button>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {Array.from({ length: totalPages }).map((_, i) => (
+                    <button key={i} className="r-pageDot" onClick={() => setCurrentPage(i + 1)} style={{ width: 30, height: 30, borderRadius: 7, border: `1px solid ${C.border}`, background: currentPage === i + 1 ? C.blueL : "transparent", color: currentPage === i + 1 ? C.blue : C.muted, borderColor: currentPage === i + 1 ? C.blue : C.border, fontFamily: F, fontSize: "0.78rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", transition: "all .15s" }}>
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
+                <button className="r-pageBtn" onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} style={{ padding: "7px 14px", borderRadius: 7, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontFamily: F, fontSize: "0.78rem", cursor: currentPage === totalPages ? "not-allowed" : "pointer", opacity: currentPage === totalPages ? 0.3 : 1, transition: "all .15s" }}>Next →</button>
               </div>
-              <button className="r-pageBtn"
-                onClick={() => setCurrentPage(p => Math.min(p+1,totalPages))}
-                disabled={currentPage===totalPages}
-                style={{ padding:"7px 14px", borderRadius:7, border:`1px solid ${C.border}`,
-                  background:"transparent", color:C.muted, fontFamily:F, fontSize:"0.78rem",
-                  cursor:currentPage===totalPages?"not-allowed":"pointer",
-                  opacity:currentPage===totalPages?0.3:1, transition:"all .15s" }}>
-                Next →
-              </button>
-            </div>
+            )}
           </>
         )}
       </section>
 
       {/* INSIGHTS */}
-      <section className="r-fu r-fu5" style={{ background:C.card, border:`1px solid ${C.border}`,
-        borderRadius:14, padding:"22px 24px", boxShadow:C.s1 }}>
-        <div style={{ marginBottom:16 }}>
-          <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>AI Insights</h3>
-          <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>Automated analysis of your utility patterns</p>
+      <section className="r-fu r-fu5" style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 14, padding: "22px 24px", boxShadow: C.s1 }}>
+        <div style={{ marginBottom: 16 }}>
+          <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: C.ink, margin: "0 0 3px" }}>AI Insights</h3>
+          <p style={{ fontSize: "0.72rem", color: C.muted, margin: 0 }}>Automated analysis of your utility patterns</p>
         </div>
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))", gap:12 }}>
-          {insights.map((ins,i) => {
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill,minmax(280px,1fr))", gap: 12 }}>
+          {insightsData.map((ins, i) => {
             const ic = insightStyle[ins.type] || insightStyle.info;
             return (
-              <div key={i} style={{ display:"flex", alignItems:"flex-start", gap:12,
-                padding:"13px 16px", borderRadius:10,
-                background:ic.bg, border:`1px solid ${ic.bdr}` }}>
-                <div style={{ width:22, height:22, borderRadius:"50%", display:"flex",
-                  alignItems:"center", justifyContent:"center", flexShrink:0,
-                  background:`${ic.accent}22`, color:ic.accent }}>
-                  {ic.icon}
-                </div>
-                <p style={{ margin:0, fontSize:"0.8rem", lineHeight:1.55, color:C.body }}>{ins.text}</p>
+              <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "13px 16px", borderRadius: 10, background: ic.bg, border: `1px solid ${ic.bdr}` }}>
+                <div style={{ width: 22, height: 22, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: `${ic.accent}22`, color: ic.accent }}>{ic.icon}</div>
+                <p style={{ margin: 0, fontSize: "0.8rem", lineHeight: 1.55, color: C.body }}>{ins.text}</p>
               </div>
             );
           })}
