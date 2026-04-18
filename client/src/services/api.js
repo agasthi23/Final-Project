@@ -270,7 +270,75 @@ export const adminAPI = {
   getMonthlyStats: () =>
     api.get("/admin/monthly-stats"),
 };
+// ─────────────────────────────────────────────
+//  REPORTS  —  /api/reports
+//  Used by: Report page
+// ─────────────────────────────────────────────
+export const reportsAPI = {
 
+  // GET /api/reports/summary
+  // returns KPI summary: totalUnits, totalAmount, avgMonthlyCost, peakExpenditure
+  getSummary: (params) =>
+    api.get("/reports/summary", { params }),
+
+  // GET /api/reports/consumption
+  // returns consumption chart data: { month, Electricity, Water }
+  getConsumption: (params) =>
+    api.get("/reports/consumption", { params }),
+
+  // GET /api/reports/expenses
+  // returns stacked bar chart data: { month, Electricity, Water, Internet }
+  getExpenses: (params) =>
+    api.get("/reports/expenses", { params }),
+
+  // GET /api/reports/distribution
+  // returns pie chart data: { name, value } for each utility
+  getDistribution: (params) =>
+    api.get("/reports/distribution", { params }),
+
+  // GET /api/reports/records
+  // returns detailed records with pagination: { records, pagination }
+  getRecords: (params) =>
+    api.get("/reports/records", { params }),
+
+  // GET /api/reports/insights
+  // returns AI-generated insights: { type, text }
+  getInsights: (params) =>
+    api.get("/reports/insights", { params }),
+
+  // GET /api/reports/filters
+  // returns filter options: { utilities, months, quarters, years }
+  getFilters: () =>
+    api.get("/reports/filters"),
+};
+// ─────────────────────────────────────────────
+//  PREDICTIONS  —  /api/predictions
+//  Used by: Prediction page
+// ─────────────────────────────────────────────
+export const predictionsAPI = {
+  // GET /api/predictions/next-month
+  getNextMonth: (params) => api.get("/predictions/next-month", { params }),
+  
+  // GET /api/predictions/history
+  getHistory: (params) => api.get("/predictions/history", { params }),
+  
+  // GET /api/predictions/summary
+  getSummary: () => api.get("/predictions/summary"),
+};
+export const analyticsAPI = {
+  getStats: (params) => api.get("/analytics/stats", { params }),
+  getMonthlyUsage: (params) => api.get("/analytics/monthly-usage", { params }),
+  getMonthlyCost: (params) => api.get("/analytics/monthly-cost", { params }),
+  getDistribution: (params) => api.get("/analytics/distribution", { params }),
+  getInsights: (params) => api.get("/analytics/insights", { params }),
+};
+// Add to your api.js
+
+export const dashboardAPI = {
+  getSummary: () => api.get("/dashboard/summary"),
+  getTrends: () => api.get("/dashboard/trends"),
+  getAlerts: () => api.get("/dashboard/alerts"),
+};
 
 // ─────────────────────────────────────────────
 //  USAGE GUIDE — how to use in your pages

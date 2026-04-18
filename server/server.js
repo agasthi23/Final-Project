@@ -9,7 +9,12 @@ import authRoutes from "./routes/authRoutes.js";
 import billRoutes from "./routes/billRoutes.js";
 import tariffRoutes from "./routes/tariffRoutes.js";
 import adminRoutes  from "./routes/adminRoutes.js";
-import budgetRoutes from "./routes/budgetRoutes.js";
+import reportsRoutes from "./routes/reportsRoutes.js";
+import predictionsRoutes from "./routes/predictionsRoutes.js";
+import analyticsRoutes from "./routes/analyticsRoutes.js";
+import dashboardRoutes from "./routes/dashboardRoutes.js";
+
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,7 +38,12 @@ app.use("/api/auth", authRoutes);
 app.use("/api/bills", billRoutes);
 app.use("/api/tariff", tariffRoutes);
 app.use("/api/admin",  adminRoutes);
-app.use("/api/budget", budgetRoutes);
+app.use("/api/reports", reportsRoutes);
+app.use("/api/predictions", predictionsRoutes);
+app.use("/api/analytics", analyticsRoutes);
+app.use("/api/dashboard", dashboardRoutes);
+
+
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
   .then(() => {
