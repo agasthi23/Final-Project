@@ -1,5 +1,5 @@
 // src/pages/Dashboard.jsx
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import {
   AreaChart, Area, BarChart, Bar,
@@ -9,10 +9,11 @@ import {
 } from "recharts";
 import {
   FiDroplet, FiZap, FiDollarSign,
-  FiAlertTriangle, FiCheckCircle, FiArrowUp, FiArrowDown,
+  FiAlertTriangle, FiArrowUp, FiArrowDown,
   FiActivity, FiBarChart2, FiChevronRight, FiInfo,
 } from "react-icons/fi";
 import { useTheme } from "../context/ThemeContext";
+import { dashboardAPI } from "../services/api";
 
 (() => {
   if (!document.getElementById("db-font")) {
@@ -40,75 +41,69 @@ import { useTheme } from "../context/ThemeContext";
 
 const F = "'Plus Jakarta Sans',-apple-system,sans-serif";
 
-const TREND = [
-  { m:"Jun", water:24, elec:138, waterBill:2020, elecBill:4970, total:7200 },
-  { m:"Jul", water:26, elec:145, waterBill:2190, elecBill:4760, total:7800 },
-  { m:"Aug", water:30, elec:155, waterBill:2530, elecBill:5020, total:8400 },
-  { m:"Sep", water:27, elec:148, waterBill:2280, elecBill:4820, total:7950 },
-  { m:"Oct", water:25, elec:140, waterBill:2110, elecBill:5040, total:7500 },
-  { m:"Nov", water:28, elec:152, waterBill:2360, elecBill:4990, total:8200 },
-  { m:"Dec*",water:28, elec:145, waterBill:2360, elecBill:5240, total:8450, predicted:true },
-];
-const CURRENT = { water:25, elec:140, waterBill:2110, elecBill:5040, fixedFees:350, total:7500, budget:8000 };
-CURRENT.budgetPct = Math.round((CURRENT.total/CURRENT.budget)*100);
-const PRED = { water:28, elec:145, waterBill:2360, elecBill:5240, fixedFees:850, costChange:3,
-  waterUnitsChange:10, elecUnitsChange:-5, waterBillChange:12, elecBillChange:4 };
-PRED.total = PRED.waterBill + PRED.elecBill + PRED.fixedFees;
-
 export default function Dashboard() {
-  // ── Pull real user from AuthContext ──
   const { user: authUser } = useAuth();
   const { darkMode } = useTheme();
-  const [activeTab, setActiveTab] = useState("Monthly");
+  const [activeTab, setActiveTab] = useState("Both");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [dashboardData, setDashboardData] = useState(null);
 
   const C = {
     page:   darkMode ? "#0f172a" : "#f3f4f8",
     card:   darkMode ? "#1e293b" : "#ffffff",
     hover:  darkMode ? "#334155" : "#f0f2f7",
-
     ink:    darkMode ? "#f1f5f9" : "#0f172a",
     body:   darkMode ? "#cbd5e1" : "#334155",
     muted:  darkMode ? "#94a3b8" : "#64748b",
     faint:  darkMode ? "#64748b" : "#94a3b8",
-
     border: darkMode ? "#334155" : "#e2e8f0",
     borderB:darkMode ? "#475569" : "#cbd5e1",
-
     blue:"#2563eb",
     blueD:"#1d4ed8",
     blueL: darkMode ? "rgba(37,99,235,0.15)" : "#eff6ff",
     blueM: darkMode ? "#1e3a8a" : "#bfdbfe",
-
     teal:"#0891b2",
     tealL: darkMode ? "rgba(8,145,178,0.15)" : "#ecfeff",
     tealM: darkMode ? "#164e63" : "#a5f3fc",
-
     green:"#059669",
     greenL: darkMode ? "rgba(5,150,105,0.15)" : "#ecfdf5",
     greenM: darkMode ? "#064e3b" : "#a7f3d0",
-
     amber:"#d97706",
     amberL: darkMode ? "rgba(217,119,6,0.15)" : "#fffbeb",
     amberM: darkMode ? "#78350f" : "#fde68a",
-
     red:"#dc2626",
     redL: darkMode ? "rgba(220,38,38,0.15)" : "#fef2f2",
     redM: darkMode ? "#7f1d1d" : "#fecaca",
-
     violet:"#7c3aed",
     violetL: darkMode ? "rgba(124,58,237,0.15)" : "#f5f3ff",
     violetM: darkMode ? "#4c1d95" : "#ddd6fe",
-
     s1:"0 1px 3px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04)",
     s2:"0 4px 16px rgba(15,23,42,.08),0 2px 4px rgba(15,23,42,.04)",
     s3:"0 12px 40px rgba(15,23,42,.10),0 4px 8px rgba(15,23,42,.04)",
   };
 
-  const PIE = [
-    { name:"Electricity", value:62, color:C.blue },
-    { name:"Water",       value:28, color:C.teal },
-    { name:"Fixed Fees",  value:10, color:C.violet },
-  ];
+  const fetchDashboardData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await dashboardAPI.getSummary();
+      if (res.data?.success) {
+        setDashboardData(res.data.data);
+      } else {
+        setError("Failed to load dashboard data");
+      }
+    } catch (err) {
+      console.error("Fetch dashboard error:", err);
+      setError("Failed to load dashboard data. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   const Badge = ({ val }) => {
     const up = val >= 0;
@@ -168,12 +163,42 @@ export default function Dashboard() {
 
   const ax = { fill:C.faint, fontSize:11, fontFamily:F };
 
-  const monthName = new Date().toLocaleString('default', { month: 'long' });
-  const displayName = authUser?.name || authUser?.username || 'User';
-  const COST_CMP = TREND.map(t => ({ m: t.m, cost: t.total }));
+  if (loading) {
+    return (
+      <div style={{ minHeight:"100vh", background:C.page, fontFamily:F, color:C.ink, padding:"28px 32px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12, color:C.muted }}>
+          <div style={{ width:18, height:18, border:`2px solid ${C.border}`, borderTopColor:C.blue, borderRadius:"50%", animation:"spin 0.7s linear infinite" }}/>
+          Loading dashboard...
+        </div>
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+      </div>
+    );
+  }
 
-  const overBudget = CURRENT.budgetPct >= 100;
-  const nearBudget = CURRENT.budgetPct >= 85 && !overBudget;
+  if (error || !dashboardData) {
+    return (
+      <div style={{ minHeight:"100vh", background:C.page, fontFamily:F, color:C.ink, padding:"28px 32px" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:10, padding:"14px 18px", borderRadius:12, background:C.redL, border:`1px solid ${C.redM}`, color:C.red, fontSize:"0.875rem" }}>
+          <FiAlertTriangle size={16}/>
+          <div style={{ flex:1 }}>{error || "Failed to load dashboard data"}</div>
+          <button onClick={fetchDashboardData} style={{ padding:"5px 12px", borderRadius:7, border:`1px solid ${C.redM}`, background:"transparent", color:C.red, cursor:"pointer" }}>Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  const { data } = { data: dashboardData };
+  // const monthName = data.currentMonth?.split(" ")[0] || "April";
+  const displayName = authUser?.name || "User";
+  
+  const PIE = [
+    { name:"Electricity", value:data.distribution?.electricity || 62, color:C.blue },
+    { name:"Water", value:data.distribution?.water || 28, color:C.teal },
+    { name:"Fixed Fees", value:data.distribution?.fixedFees || 10, color:C.violet },
+  ];
+
+  const overBudget = data.current?.budgetPct >= 100;
+  const nearBudget = data.current?.budgetPct >= 85 && !overBudget;
 
   return (
     <div style={{ minHeight:"100vh", background:C.page, fontFamily:F, color:C.ink, padding:"0 0 64px" }}>
@@ -194,7 +219,7 @@ export default function Dashboard() {
                 <span className="live" style={{ width:7, height:7, borderRadius:"50%",
                   background:"#4ade80", display:"inline-block" }}/>
                 <span style={{ fontSize:"0.7rem", fontWeight:700, color:"rgba(255,255,255,.7)",
-                  letterSpacing:"0.1em", textTransform:"uppercase" }}>Live · {monthName} 2024</span>
+                  letterSpacing:"0.1em", textTransform:"uppercase" }}>Live · {data.currentMonth}</span>
               </div>
               <h1 style={{ fontSize:"1.125rem", fontWeight:700, color:"rgba(255,255,255,.8)",
                 margin:"0 0 4px", letterSpacing:"-0.01em" }}>
@@ -206,12 +231,12 @@ export default function Dashboard() {
               <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:8 }}>
                 <span style={{ fontSize:"3rem", fontWeight:800, color:"#fff",
                   letterSpacing:"-0.05em", lineHeight:1 }}>
-                  Rs. {CURRENT.total.toLocaleString()}
+                  Rs. {data.current?.total?.toLocaleString() || 0}
                 </span>
-                <Badge val={3}/>
+                <Badge val={data.predictions?.totalChange || 0}/>
               </div>
               <p style={{ fontSize:"0.78rem", color:"rgba(255,255,255,.6)", margin:0 }}>
-                Current month total · Budget: Rs. {CURRENT.budget.toLocaleString()}
+                Current month total · Budget: Rs. {data.current?.budget?.toLocaleString() || 0}
               </p>
             </div>
 
@@ -225,25 +250,25 @@ export default function Dashboard() {
                   <svg viewBox="0 0 56 56" style={{ transform:"rotate(-90deg)", width:56, height:56 }}>
                     <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(255,255,255,.15)" strokeWidth="6"/>
                     <circle cx="28" cy="28" r="22" fill="none"
-                      stroke={CURRENT.budgetPct>90?"#fbbf24":"#4ade80"} strokeWidth="6"
-                      strokeDasharray={`${2*Math.PI*22*CURRENT.budgetPct/100} 999`}
+                      stroke={data.current?.budgetPct > 90 ? "#fbbf24" : "#4ade80"} strokeWidth="6"
+                      strokeDasharray={`${2 * Math.PI * 22 * (data.current?.budgetPct || 0) / 100} 999`}
                       strokeLinecap="round"/>
                   </svg>
                   <span style={{ position:"absolute", inset:0, display:"flex", alignItems:"center",
                     justifyContent:"center", fontSize:"0.75rem", fontWeight:800, color:"#fff" }}>
-                    {CURRENT.budgetPct}%
+                    {data.current?.budgetPct || 0}%
                   </span>
                 </div>
                 <div>
                   <p style={{ fontSize:"1rem", fontWeight:800, color:"#fff", margin:"0 0 2px" }}>
-                    Rs. {CURRENT.total.toLocaleString()}
+                    Rs. {data.current?.total?.toLocaleString() || 0}
                   </p>
                   <p style={{ fontSize:"0.72rem", color:"rgba(255,255,255,.6)", margin:0 }}>
-                    of Rs. {CURRENT.budget.toLocaleString()}
+                    of Rs. {data.current?.budget?.toLocaleString() || 0}
                   </p>
-                  <p style={{ fontSize:"0.7rem", color: CURRENT.budgetPct>90?"#fbbf24":"#4ade80",
+                  <p style={{ fontSize:"0.7rem", color: (data.current?.budgetPct || 0) > 90 ? "#fbbf24" : "#4ade80",
                     margin:"4px 0 0", fontWeight:600 }}>
-                    {overBudget?"⚠ Over budget":nearBudget?"⚡ Approaching limit":"✓ Within budget"}
+                    {overBudget ? "⚠ Over budget" : nearBudget ? "⚡ Approaching limit" : "✓ Within budget"}
                   </p>
                 </div>
               </div>
@@ -251,7 +276,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* STAT CARDS */}
+        {/* STAT CARDS - Current Month */}
         <Label mb={12}>This Month at a Glance</Label>
         <p style={{ fontSize:"0.68rem", fontWeight:700, color:C.muted, margin:"0 0 8px",
           display:"flex", alignItems:"center", gap:8 }}>
@@ -261,11 +286,11 @@ export default function Dashboard() {
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14, marginBottom:16 }}>
           {[
             { icon:<FiDroplet size={17}/>, title:"Water Bill", accent:C.teal, bg:C.tealL, bdr:C.tealM, cls:"fu1",
-              primary:`Rs. ${CURRENT.waterBill.toLocaleString()}`, secondary:`${CURRENT.water} Units used`, chg:-4 },
+              primary:`Rs. ${data.current?.waterBill?.toLocaleString() || 0}`, secondary:`${data.current?.water || 0} Units used`, chg:data.predictions?.waterBillChange || 0 },
             { icon:<FiZap size={17}/>, title:"Electricity Bill", accent:C.blue, bg:C.blueL, bdr:C.blueM, cls:"fu2",
-              primary:`Rs. ${CURRENT.elecBill.toLocaleString()}`, secondary:`${CURRENT.elec} kWh used`, chg:-5 },
+              primary:`Rs. ${data.current?.elecBill?.toLocaleString() || 0}`, secondary:`${data.current?.elec || 0} kWh used`, chg:data.predictions?.elecBillChange || 0 },
             { icon:<FiDollarSign size={17}/>, title:"Total Bill", accent:C.violet, bg:C.violetL, bdr:C.violetM, cls:"fu3",
-              primary:`Rs. ${CURRENT.total.toLocaleString()}`, secondary:"This month's total", chg:3 },
+              primary:`Rs. ${data.current?.total?.toLocaleString() || 0}`, secondary:"This month's total", chg:data.predictions?.totalChange || 0 },
           ].map((s,i) => (
             <div key={i} className={`fu db-hover ${s.cls}`} style={{ background:C.card,
               border:`1px solid ${C.border}`, borderRadius:14, overflow:"hidden",
@@ -288,6 +313,7 @@ export default function Dashboard() {
           ))}
         </div>
 
+        {/* STAT CARDS - Predictions */}
         <p style={{ fontSize:"0.68rem", fontWeight:700, color:C.amber, margin:"0 0 8px",
           display:"flex", alignItems:"center", gap:8 }}>
           <span style={{ width:8, height:8, borderRadius:2, background:C.amber, display:"inline-block" }}/>
@@ -296,11 +322,11 @@ export default function Dashboard() {
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14, marginBottom:32 }}>
           {[
             { icon:<FiDroplet size={17}/>, title:"Water Bill", accent:C.teal, bg:C.tealL, bdr:C.tealM, cls:"fu4",
-              primary:`Rs. ${PRED.waterBill.toLocaleString()}`, secondary:`${PRED.water} Units est.`, chg:PRED.waterBillChange },
+              primary:`Rs. ${data.predictions?.waterBill?.toLocaleString() || 0}`, secondary:`${data.predictions?.water || 0} Units est.`, chg:data.predictions?.waterBillChange || 0 },
             { icon:<FiZap size={17}/>, title:"Electricity Bill", accent:C.blue, bg:C.blueL, bdr:C.blueM, cls:"fu5",
-              primary:`Rs. ${PRED.elecBill.toLocaleString()}`, secondary:`${PRED.elec} kWh est.`, chg:PRED.elecBillChange },
+              primary:`Rs. ${data.predictions?.elecBill?.toLocaleString() || 0}`, secondary:`${data.predictions?.elec || 0} kWh est.`, chg:data.predictions?.elecBillChange || 0 },
             { icon:<FiBarChart2 size={17}/>, title:"Total Predicted", accent:C.amber, bg:C.amberL, bdr:C.amberM, cls:"fu5",
-              primary:`Rs. ${PRED.total.toLocaleString()}`, secondary:"Overall next month", chg:PRED.costChange },
+              primary:`Rs. ${data.predictions?.total?.toLocaleString() || 0}`, secondary:"Overall next month", chg:data.predictions?.totalChange || 0 },
           ].map((s,i) => (
             <div key={i} className={`fu db-hover ${s.cls}`} style={{ background:C.card,
               border:`1px solid ${s.bdr}`, borderRadius:14, overflow:"hidden",
@@ -362,17 +388,17 @@ export default function Dashboard() {
                 <tbody>
                   {[
                     { icon:<FiDroplet size={15}/>, label:"Water", accent:C.teal, bg:C.tealL, bdr:C.tealM,
-                      curUnits:`${CURRENT.water} Units`, curBill:`Rs. ${CURRENT.waterBill.toLocaleString()}`,
-                      predUnits:`${PRED.water} Units`, predBill:`Rs. ${PRED.waterBill.toLocaleString()}`,
-                      unitsChg:PRED.waterUnitsChange, billChg:PRED.waterBillChange },
+                      curUnits:`${data.current?.water || 0} Units`, curBill:`Rs. ${data.current?.waterBill?.toLocaleString() || 0}`,
+                      predUnits:`${data.predictions?.water || 0} Units`, predBill:`Rs. ${data.predictions?.waterBill?.toLocaleString() || 0}`,
+                      unitsChg:data.predictions?.waterUnitsChange || 0, billChg:data.predictions?.waterBillChange || 0 },
                     { icon:<FiZap size={15}/>, label:"Electricity", accent:C.blue, bg:C.blueL, bdr:C.blueM,
-                      curUnits:`${CURRENT.elec} kWh`, curBill:`Rs. ${CURRENT.elecBill.toLocaleString()}`,
-                      predUnits:`${PRED.elec} kWh`, predBill:`Rs. ${PRED.elecBill.toLocaleString()}`,
-                      unitsChg:PRED.elecUnitsChange, billChg:PRED.elecBillChange },
+                      curUnits:`${data.current?.elec || 0} kWh`, curBill:`Rs. ${data.current?.elecBill?.toLocaleString() || 0}`,
+                      predUnits:`${data.predictions?.elec || 0} kWh`, predBill:`Rs. ${data.predictions?.elecBill?.toLocaleString() || 0}`,
+                      unitsChg:data.predictions?.elecUnitsChange || 0, billChg:data.predictions?.elecBillChange || 0 },
                     { icon:<FiActivity size={15}/>, label:"Fixed Fees", accent:C.violet, bg:C.violetL, bdr:C.violetM,
-                      curUnits:"—", curBill:`Rs. ${CURRENT.fixedFees.toLocaleString()}`,
-                      predUnits:"—", predBill:`Rs. ${PRED.fixedFees.toLocaleString()}`,
-                      unitsChg:null, billChg:((PRED.fixedFees-CURRENT.fixedFees)/CURRENT.fixedFees*100).toFixed(0)*1 },
+                      curUnits:"—", curBill:`Rs. ${data.current?.fixedFees?.toLocaleString() || 0}`,
+                      predUnits:"—", predBill:`Rs. ${data.predictions?.fixedFees?.toLocaleString() || 0}`,
+                      unitsChg:null, billChg:data.predictions?.fixedFeesChange || 0 },
                   ].map((row,i) => (
                     <tr key={i} style={{ borderBottom:`1px solid ${C.border}` }}>
                       <td style={{ padding:"14px 20px" }}>
@@ -396,7 +422,7 @@ export default function Dashboard() {
                         <Badge val={row.billChg}/>
                         {row.unitsChg !== null && (
                           <p style={{ fontSize:"0.68rem", color:C.faint, margin:"3px 0 0", textAlign:"right" }}>
-                            Units: {row.unitsChg>0?"+":""}{row.unitsChg}%
+                            Units: {row.unitsChg > 0 ? "+" : ""}{row.unitsChg}%
                           </p>
                         )}
                       </td>
@@ -411,15 +437,15 @@ export default function Dashboard() {
                       <span style={{ fontSize:"0.875rem", fontWeight:800, color:C.ink }}>Total Estimated Bill</span>
                     </td>
                     <td style={{ padding:"16px 20px", textAlign:"right" }}>
-                      <span style={{ fontSize:"0.925rem", fontWeight:700, color:C.ink }}>Rs. {CURRENT.total.toLocaleString()}</span>
+                      <span style={{ fontSize:"0.925rem", fontWeight:700, color:C.ink }}>Rs. {data.current?.total?.toLocaleString() || 0}</span>
                     </td>
                     <td style={{ padding:"16px 10px", textAlign:"center" }}><FiChevronRight size={14} color={C.blue}/></td>
                     <td style={{ padding:"16px 20px", textAlign:"right" }}>
                       <span style={{ fontSize:"1rem", fontWeight:800, color:C.blue, letterSpacing:"-0.02em" }}>
-                        Rs. {PRED.total.toLocaleString()}
+                        Rs. {data.predictions?.total?.toLocaleString() || 0}
                       </span>
                     </td>
-                    <td style={{ padding:"16px 20px", textAlign:"right" }}><Badge val={PRED.costChange}/></td>
+                    <td style={{ padding:"16px 20px", textAlign:"right" }}><Badge val={data.predictions?.totalChange || 0}/></td>
                   </tr>
                 </tbody>
               </table>
@@ -429,7 +455,7 @@ export default function Dashboard() {
               <p style={{ fontSize:"0.72rem", color:C.muted, margin:0, flex:1 }}>📈 Bill trend over last 6 months</p>
               <div style={{ flex:2, minWidth:200 }}>
                 <ResponsiveContainer width="100%" height={40}>
-                  <AreaChart data={TREND} margin={{ top:4, right:4, left:4, bottom:4 }}>
+                  <AreaChart data={data.trends || []} margin={{ top:4, right:4, left:4, bottom:4 }}>
                     <defs>
                       <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor={C.blue} stopOpacity={0.2}/>
@@ -464,7 +490,7 @@ export default function Dashboard() {
               </div>
             }>
             <ResponsiveContainer width="100%" height={230}>
-              <AreaChart data={TREND} margin={{ top:10, right:16, left:-10, bottom:0 }}>
+              <AreaChart data={data.trends || []} margin={{ top:10, right:16, left:-10, bottom:0 }}>
                 <defs>
                   <linearGradient id="gW" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%"  stopColor={C.teal} stopOpacity={0.2}/>
@@ -494,16 +520,16 @@ export default function Dashboard() {
 
           <ChartCard title="Monthly Bill Trend" sub="Total billing cost over recent months (Rs.)">
             <ResponsiveContainer width="100%" height={230}>
-              <BarChart data={COST_CMP} margin={{ top:10, right:16, left:-10, bottom:0 }} barCategoryGap="35%">
+              <BarChart data={data.trends || []} margin={{ top:10, right:16, left:-10, bottom:0 }} barCategoryGap="35%">
                 <CartesianGrid strokeDasharray="4 4" stroke={darkMode ? "#334155" : "#e8eaf0"} vertical={false}/>
                 <XAxis dataKey="m" tick={ax} axisLine={false} tickLine={false}/>
                 <YAxis tick={ax} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/1000).toFixed(0)}k`}/>
                 <Tooltip content={<Tip prefix="Rs."/>}/>
                 <ReferenceLine x="Dec*" stroke={C.blue} strokeDasharray="3 3"/>
-                <Bar dataKey="cost" radius={[6,6,0,0]} name="Total Bill (Rs.)" fill={C.blue}>
-                  {COST_CMP.map((d,i) => (
-                    <Cell key={i} fill={d.m==="Dec*"?C.blueL:C.blue}
-                      stroke={d.m==="Dec*"?C.blue:"none"} strokeWidth={d.m==="Dec*"?2:0}/>
+                <Bar dataKey="total" radius={[6,6,0,0]} name="Total Bill (Rs.)" fill={C.blue}>
+                  {(data.trends || []).map((d,i) => (
+                    <Cell key={i} fill={d.m?.includes("*") ? C.blueL : C.blue}
+                      stroke={d.m?.includes("*") ? C.blue : "none"} strokeWidth={d.m?.includes("*") ? 2 : 0}/>
                   ))}
                 </Bar>
               </BarChart>
@@ -512,7 +538,7 @@ export default function Dashboard() {
               border:`1px solid ${C.amberM}`, borderRadius:9, display:"flex", gap:8, alignItems:"flex-start" }}>
               <FiAlertTriangle size={13} color={C.amber} style={{ marginTop:1, flexShrink:0 }}/>
               <p style={{ fontSize:"0.72rem", color:C.body, margin:0, lineHeight:1.55 }}>
-                <strong>Aug was your highest month</strong> (Rs. 8,400). Next month is predicted to be slightly higher than Nov.
+                <strong>Highest month</strong> predicted next month. Review your usage patterns.
               </p>
             </div>
           </ChartCard>
@@ -558,7 +584,7 @@ export default function Dashboard() {
 
           <ChartCard title="Per-Utility Bill Comparison" sub="Water vs Electricity billing last 6 months (Rs.)">
             <ResponsiveContainer width="100%" height={230}>
-              <BarChart data={TREND} margin={{ top:10, right:16, left:-10, bottom:0 }} barCategoryGap="25%">
+              <BarChart data={data.comparison || []} margin={{ top:10, right:16, left:-10, bottom:0 }} barCategoryGap="25%">
                 <CartesianGrid strokeDasharray="4 4" stroke={darkMode ? "#334155" : "#e8eaf0"} vertical={false}/>
                 <XAxis dataKey="m" tick={ax} axisLine={false} tickLine={false}/>
                 <YAxis tick={ax} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/1000).toFixed(1)}k`}/>
@@ -576,28 +602,32 @@ export default function Dashboard() {
         <Label mb={12}>Alerts &amp; Recommendations</Label>
         <div className="fu fu6" style={{ display:"grid",
           gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:12, marginBottom:8 }}>
-          {[
-            { icon:<FiAlertTriangle size={17}/>, title:"Water Usage Rising",
-              body:"Predicted 10% increase next month. Check for dripping taps or over-irrigation.",
-              accent:C.amber, bg:C.amberL, bdr:C.amberM },
-            { icon:<FiCheckCircle size={17}/>, title:"Electricity Trending Down",
-              body:"5% reduction forecast. Your conservation efforts from last month are paying off.",
-              accent:C.green, bg:C.greenL, bdr:C.greenM },
-            { icon:<FiActivity size={17}/>, title:"Budget on Track",
-              body:`You've used ${CURRENT.budgetPct}% of your Rs.${CURRENT.budget.toLocaleString()} budget.`,
-              accent:C.blue, bg:C.blueL, bdr:C.blueM },
-          ].map((a,i) => (
-            <div key={i} className="db-hover"
-              style={{ background:a.bg, border:`1px solid ${a.bdr}`, borderRadius:12,
-                padding:"14px 16px", display:"flex", alignItems:"flex-start", gap:11,
-                transition:"transform .2s ease, box-shadow .2s ease", cursor:"default" }}>
-              <span style={{ color:a.accent, marginTop:1, flexShrink:0 }}>{a.icon}</span>
-              <div>
-                <h4 style={{ fontSize:"0.83rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>{a.title}</h4>
-                <p style={{ fontSize:"0.77rem", color:C.body, margin:0, lineHeight:1.55 }}>{a.body}</p>
+          {(data.alerts || []).map((alert, i) => {
+            const getIcon = () => {
+              if (alert.icon === "water") return <FiDroplet size={17}/>;
+              if (alert.icon === "elec") return <FiZap size={17}/>;
+              return <FiActivity size={17}/>;
+            };
+            const getColors = () => {
+              if (alert.type === "warning") return { accent:C.amber, bg:C.amberL, bdr:C.amberM };
+              if (alert.type === "danger") return { accent:C.red, bg:C.redL, bdr:C.redM };
+              if (alert.type === "success") return { accent:C.green, bg:C.greenL, bdr:C.greenM };
+              return { accent:C.blue, bg:C.blueL, bdr:C.blueM };
+            };
+            const colors = getColors();
+            return (
+              <div key={i} className="db-hover"
+                style={{ background:colors.bg, border:`1px solid ${colors.bdr}`, borderRadius:12,
+                  padding:"14px 16px", display:"flex", alignItems:"flex-start", gap:11,
+                  transition:"transform .2s ease, box-shadow .2s ease", cursor:"default" }}>
+                <span style={{ color:colors.accent, marginTop:1, flexShrink:0 }}>{getIcon()}</span>
+                <div>
+                  <h4 style={{ fontSize:"0.83rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>{alert.title}</h4>
+                  <p style={{ fontSize:"0.77rem", color:C.body, margin:0, lineHeight:1.55 }}>{alert.body}</p>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
       </div>
