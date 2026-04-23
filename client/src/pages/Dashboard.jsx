@@ -48,6 +48,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [dashboardData, setDashboardData] = useState(null);
+  const [showBudgetInfo, setShowBudgetInfo] = useState(false);
 
   const C = {
     page:   darkMode ? "#0f172a" : "#f3f4f8",
@@ -188,17 +189,80 @@ export default function Dashboard() {
   }
 
   const { data } = { data: dashboardData };
-  // const monthName = data.currentMonth?.split(" ")[0] || "April";
   const displayName = authUser?.name || "User";
-  
+
+  // Safely extract values
+  const previousWaterBill = data.previous?.waterBill || 0;
+  const previousElecBill = data.previous?.elecBill || 0;
+  const previousWaterUnits = data.previous?.water || 0;
+  const previousElecUnits = data.previous?.elec || 0;
+  const previousTotal = data.previous?.total || 0;
+
+  const predictedWaterBill = data.predictions?.waterBill || 0;
+  const predictedElecBill = data.predictions?.elecBill || 0;
+  const predictedWaterUnits = data.predictions?.water || 0;
+  const predictedElecUnits = data.predictions?.elec || 0;
+  const predictedTotal = data.predictions?.total || 0;
+  const predictedWaterChange = data.predictions?.waterChange || 0;
+  const predictedElecChange = data.predictions?.elecChange || 0;
+  const predictedTotalChange = data.predictions?.totalChange || 0;
+
+  // nextMonth object (numeric data)
+  const nextMonthData = data.nextMonth || {};
+  const nextWaterBill = nextMonthData.waterBill || 0;
+  const nextElecBill = nextMonthData.elecBill || 0;
+  const nextWaterUnits = nextMonthData.water || 0;
+  const nextElecUnits = nextMonthData.elec || 0;
+  const nextTotal = nextMonthData.total || 0;
+
+  // String labels for month names — separate from the nextMonth data object
+  const previousMonthLabel = data.previousMonth || "March 2026";
+  const currentMonthLabel = data.currentMonth || "April 2026";
+  const nextMonthLabel = data.nextMonthLabel || data.nextMonthName || "May 2026";
+
   const PIE = [
-    { name:"Electricity", value:data.distribution?.electricity || 62, color:C.blue },
-    { name:"Water", value:data.distribution?.water || 28, color:C.teal },
-    { name:"Fixed Fees", value:data.distribution?.fixedFees || 10, color:C.violet },
+    { name:"Electricity", value:data.distribution?.electricity || 65, color:C.blue },
+    { name:"Water", value:data.distribution?.water || 35, color:C.teal },
   ];
 
-  const overBudget = data.current?.budgetPct >= 100;
-  const nearBudget = data.current?.budgetPct >= 85 && !overBudget;
+  const BudgetInfoModal = () => {
+    if (!showBudgetInfo) return null;
+    const salary = data?.salary || 100000;
+    const budgetAmount = salary * 0.08;
+    const percentUsed = Math.min(Math.round((predictedTotal / budgetAmount) * 100), 100);
+    
+    return (
+      <div style={{
+        position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+        background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center",
+        justifyContent: "center", zIndex: 9999
+      }} onClick={() => setShowBudgetInfo(false)}>
+        <div style={{
+          background: C.card, borderRadius: 20, padding: "24px",
+          maxWidth: 320, width: "90%"
+        }} onClick={(e) => e.stopPropagation()}>
+          <h3 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: 16 }}>📊 Understanding Your Budget</h3>
+          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+            <p style={{ fontSize: "0.8rem", marginBottom: 12 }}><strong>Calculation:</strong></p>
+            <ul style={{ fontSize: "0.75rem", paddingLeft: 20, marginBottom: 16 }}>
+              <li>Salary: <strong>Rs. {salary.toLocaleString()}</strong></li>
+              <li>8% budget: <strong>Rs. {budgetAmount.toLocaleString()}</strong></li>
+              <li>Predicted bill: <strong>Rs. {predictedTotal.toLocaleString()}</strong></li>
+              <li>{predictedTotal.toLocaleString()} ÷ {budgetAmount.toLocaleString()} × 100 = <strong>{percentUsed}%</strong></li>
+            </ul>
+            <div style={{ background: C.blueL, borderRadius: 8, padding: "10px", textAlign: "center" }}>
+              <span style={{ fontSize: "0.7rem", color: C.blue }}>✅ {percentUsed}% of your 8% utility budget</span>
+            </div>
+          </div>
+          <button onClick={() => setShowBudgetInfo(false)} style={{
+            width: "100%", marginTop: 16, padding: "10px",
+            background: C.blue, border: "none", borderRadius: 10,
+            color: "#fff", fontWeight: 600, cursor: "pointer"
+          }}>Got it</button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div style={{ minHeight:"100vh", background:C.page, fontFamily:F, color:C.ink, padding:"0 0 64px" }}>
@@ -219,56 +283,73 @@ export default function Dashboard() {
                 <span className="live" style={{ width:7, height:7, borderRadius:"50%",
                   background:"#4ade80", display:"inline-block" }}/>
                 <span style={{ fontSize:"0.7rem", fontWeight:700, color:"rgba(255,255,255,.7)",
-                  letterSpacing:"0.1em", textTransform:"uppercase" }}>Live · {data.currentMonth}</span>
+                  letterSpacing:"0.1em", textTransform:"uppercase" }}>📊 {currentMonthLabel} · ML Prediction</span>
               </div>
               <h1 style={{ fontSize:"1.125rem", fontWeight:700, color:"rgba(255,255,255,.8)",
                 margin:"0 0 4px", letterSpacing:"-0.01em" }}>
                 Good morning{displayName ? `, ${displayName}` : ""} 👋
               </h1>
               <p style={{ fontSize:"0.8rem", color:"rgba(255,255,255,.6)", margin:"0 0 18px" }}>
-                Here's your utility overview for this month
+                Your AI-powered utility forecast for this month
               </p>
               <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:8 }}>
                 <span style={{ fontSize:"3rem", fontWeight:800, color:"#fff",
                   letterSpacing:"-0.05em", lineHeight:1 }}>
-                  Rs. {data.current?.total?.toLocaleString() || 0}
+                  Rs. {predictedTotal.toLocaleString()}
                 </span>
-                <Badge val={data.predictions?.totalChange || 0}/>
+                <Badge val={predictedTotalChange}/>
               </div>
               <p style={{ fontSize:"0.78rem", color:"rgba(255,255,255,.6)", margin:0 }}>
-                Current month total · Budget: Rs. {data.current?.budget?.toLocaleString() || 0}
+                Estimated {currentMonthLabel} bill · Budget: Rs. {data.budget?.amount?.toLocaleString() || 0}
               </p>
             </div>
 
             <div style={{ background:"rgba(255,255,255,.12)", backdropFilter:"blur(12px)",
               border:"1px solid rgba(255,255,255,.18)", borderRadius:16, padding:"18px 22px",
               minWidth:200, flexShrink:0 }}>
-              <p style={{ fontSize:"0.68rem", fontWeight:700, color:"rgba(255,255,255,.65)",
-                textTransform:"uppercase", letterSpacing:"0.1em", margin:"0 0 10px" }}>Budget Used</p>
+              
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                <p style={{ fontSize:"0.68rem", fontWeight:700, color:"rgba(255,255,255,.65)",
+                  textTransform:"uppercase", letterSpacing:"0.1em", margin:0 }}>
+                  Budget Used (vs 8% of salary)
+                </p>
+                <FiInfo 
+                  size={12} 
+                  color="rgba(255,255,255,.7)" 
+                  style={{ cursor: "pointer" }}
+                  onClick={() => setShowBudgetInfo(true)}
+                />
+              </div>
+              
               <div style={{ display:"flex", alignItems:"center", gap:14 }}>
                 <div style={{ position:"relative", width:56, height:56, flexShrink:0 }}>
                   <svg viewBox="0 0 56 56" style={{ transform:"rotate(-90deg)", width:56, height:56 }}>
                     <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(255,255,255,.15)" strokeWidth="6"/>
                     <circle cx="28" cy="28" r="22" fill="none"
-                      stroke={data.current?.budgetPct > 90 ? "#fbbf24" : "#4ade80"} strokeWidth="6"
-                      strokeDasharray={`${2 * Math.PI * 22 * (data.current?.budgetPct || 0) / 100} 999`}
+                      stroke={(() => {
+                        const percent = Math.min(((predictedTotal / ((data.salary || 100000) * 0.08)) * 100), 100);
+                        return percent > 90 ? "#fbbf24" : "#4ade80";
+                      })()} 
+                      strokeWidth="6"
+                      strokeDasharray={`${2 * Math.PI * 22 * Math.min(((predictedTotal / ((data.salary || 100000) * 0.08)) * 100), 100) / 100} 999`}
                       strokeLinecap="round"/>
                   </svg>
                   <span style={{ position:"absolute", inset:0, display:"flex", alignItems:"center",
                     justifyContent:"center", fontSize:"0.75rem", fontWeight:800, color:"#fff" }}>
-                    {data.current?.budgetPct || 0}%
+                    {Math.min(Math.round((predictedTotal / ((data.salary || 100000) * 0.08)) * 100), 100)}%
                   </span>
                 </div>
                 <div>
                   <p style={{ fontSize:"1rem", fontWeight:800, color:"#fff", margin:"0 0 2px" }}>
-                    Rs. {data.current?.total?.toLocaleString() || 0}
+                    Rs. {predictedTotal.toLocaleString()}
                   </p>
                   <p style={{ fontSize:"0.72rem", color:"rgba(255,255,255,.6)", margin:0 }}>
-                    of Rs. {data.current?.budget?.toLocaleString() || 0}
+                    of Rs. {((data.salary || 100000) * 0.08).toLocaleString()}
                   </p>
-                  <p style={{ fontSize:"0.7rem", color: (data.current?.budgetPct || 0) > 90 ? "#fbbf24" : "#4ade80",
+                  <p style={{ fontSize:"0.7rem", color: Math.min(((predictedTotal / ((data.salary || 100000) * 0.08)) * 100), 100) > 90 ? "#fbbf24" : "#4ade80",
                     margin:"4px 0 0", fontWeight:600 }}>
-                    {overBudget ? "⚠ Over budget" : nearBudget ? "⚡ Approaching limit" : "✓ Within budget"}
+                    {Math.min(((predictedTotal / ((data.salary || 100000) * 0.08)) * 100), 100) >= 100 ? "⚠ Over budget" : 
+                     Math.min(((predictedTotal / ((data.salary || 100000) * 0.08)) * 100), 100) >= 85 ? "⚡ Approaching limit" : "✓ Within budget"}
                   </p>
                 </div>
               </div>
@@ -276,21 +357,57 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* STAT CARDS - Current Month */}
-        <Label mb={12}>This Month at a Glance</Label>
-        <p style={{ fontSize:"0.68rem", fontWeight:700, color:C.muted, margin:"0 0 8px",
+        {/* LAST MONTH - ACTUAL */}
+        <Label mb={12}>Last Month's Bill</Label>
+        <p style={{ fontSize:"0.68rem", fontWeight:700, color:C.green, margin:"0 0 8px",
           display:"flex", alignItems:"center", gap:8 }}>
-          <span style={{ width:8, height:8, borderRadius:2, background:C.ink, display:"inline-block" }}/>
-          Current Month
+          <span style={{ width:8, height:8, borderRadius:2, background:C.green, display:"inline-block" }}/>
+          ✅ {previousMonthLabel} (Actual)
         </p>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14, marginBottom:16 }}>
           {[
             { icon:<FiDroplet size={17}/>, title:"Water Bill", accent:C.teal, bg:C.tealL, bdr:C.tealM, cls:"fu1",
-              primary:`Rs. ${data.current?.waterBill?.toLocaleString() || 0}`, secondary:`${data.current?.water || 0} Units used`, chg:data.predictions?.waterBillChange || 0 },
+              primary:`Rs. ${previousWaterBill.toLocaleString()}`, secondary:`${previousWaterUnits} Units used` },
             { icon:<FiZap size={17}/>, title:"Electricity Bill", accent:C.blue, bg:C.blueL, bdr:C.blueM, cls:"fu2",
-              primary:`Rs. ${data.current?.elecBill?.toLocaleString() || 0}`, secondary:`${data.current?.elec || 0} kWh used`, chg:data.predictions?.elecBillChange || 0 },
+              primary:`Rs. ${previousElecBill.toLocaleString()}`, secondary:`${previousElecUnits} kWh used` },
             { icon:<FiDollarSign size={17}/>, title:"Total Bill", accent:C.violet, bg:C.violetL, bdr:C.violetM, cls:"fu3",
-              primary:`Rs. ${data.current?.total?.toLocaleString() || 0}`, secondary:"This month's total", chg:data.predictions?.totalChange || 0 },
+              primary:`Rs. ${previousTotal.toLocaleString()}`, secondary:`${previousMonthLabel} total` },
+          ].map((s,i) => (
+            <div key={i} className={`fu db-hover ${s.cls}`} style={{ background:C.card,
+              border:`1px solid ${C.border}`, borderRadius:14, overflow:"hidden",
+              boxShadow:C.s1, transition:"transform .22s ease, box-shadow .22s ease" }}>
+              <div style={{ height:3, background:`linear-gradient(90deg,${s.accent},${s.accent}55)` }}/>
+              <div style={{ padding:"15px 17px 17px" }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:11 }}>
+                  <div style={{ width:36, height:36, borderRadius:9, background:s.bg,
+                    border:`1px solid ${s.bdr}`, display:"flex", alignItems:"center",
+                    justifyContent:"center", color:s.accent }}>{s.icon}</div>
+                </div>
+                <p style={{ fontSize:"0.67rem", fontWeight:800, color:C.muted, letterSpacing:"0.1em",
+                  textTransform:"uppercase", margin:"0 0 3px" }}>{s.title}</p>
+                <span style={{ fontSize:"1.35rem", fontWeight:800, color:C.ink,
+                  letterSpacing:"-0.03em", lineHeight:1, display:"block", marginBottom:3 }}>{s.primary}</span>
+                <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{s.secondary}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* THIS MONTH - ML PREDICTION */}
+        <Label mb={12}>This Month's AI Prediction</Label>
+        <p style={{ fontSize:"0.68rem", fontWeight:700, color:C.amber, margin:"0 0 8px",
+          display:"flex", alignItems:"center", gap:8 }}>
+          <span style={{ width:8, height:8, borderRadius:2, background:C.amber, display:"inline-block" }}/>
+          🤖 {currentMonthLabel} (ML Estimated)
+        </p>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14, marginBottom:16 }}>
+          {[
+            { icon:<FiDroplet size={17}/>, title:"Water Bill", accent:C.teal, bg:C.tealL, bdr:C.tealM, cls:"fu1",
+              primary:`Rs. ${predictedWaterBill.toLocaleString()}`, secondary:`${predictedWaterUnits} Units predicted`, chg:predictedWaterChange },
+            { icon:<FiZap size={17}/>, title:"Electricity Bill", accent:C.blue, bg:C.blueL, bdr:C.blueM, cls:"fu2",
+              primary:`Rs. ${predictedElecBill.toLocaleString()}`, secondary:`${predictedElecUnits} kWh predicted`, chg:predictedElecChange },
+            { icon:<FiDollarSign size={17}/>, title:"Total Bill", accent:C.violet, bg:C.violetL, bdr:C.violetM, cls:"fu3",
+              primary:`Rs. ${predictedTotal.toLocaleString()}`, secondary:`Estimated ${currentMonthLabel} total`, chg:predictedTotalChange },
           ].map((s,i) => (
             <div key={i} className={`fu db-hover ${s.cls}`} style={{ background:C.card,
               border:`1px solid ${C.border}`, borderRadius:14, overflow:"hidden",
@@ -313,20 +430,20 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* STAT CARDS - Predictions */}
-        <p style={{ fontSize:"0.68rem", fontWeight:700, color:C.amber, margin:"0 0 8px",
+        {/* NEXT MONTH - FORECAST */}
+        <p style={{ fontSize:"0.68rem", fontWeight:700, color:C.violet, margin:"0 0 8px",
           display:"flex", alignItems:"center", gap:8 }}>
-          <span style={{ width:8, height:8, borderRadius:2, background:C.amber, display:"inline-block" }}/>
-          Predicted Next Month
+          <span style={{ width:8, height:8, borderRadius:2, background:C.violet, display:"inline-block" }}/>
+          📈 {nextMonthLabel} (Forecast)
         </p>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14, marginBottom:32 }}>
           {[
             { icon:<FiDroplet size={17}/>, title:"Water Bill", accent:C.teal, bg:C.tealL, bdr:C.tealM, cls:"fu4",
-              primary:`Rs. ${data.predictions?.waterBill?.toLocaleString() || 0}`, secondary:`${data.predictions?.water || 0} Units est.`, chg:data.predictions?.waterBillChange || 0 },
+              primary:`Rs. ${nextWaterBill.toLocaleString()}`, secondary:`${nextWaterUnits} Units est.` },
             { icon:<FiZap size={17}/>, title:"Electricity Bill", accent:C.blue, bg:C.blueL, bdr:C.blueM, cls:"fu5",
-              primary:`Rs. ${data.predictions?.elecBill?.toLocaleString() || 0}`, secondary:`${data.predictions?.elec || 0} kWh est.`, chg:data.predictions?.elecBillChange || 0 },
-            { icon:<FiBarChart2 size={17}/>, title:"Total Predicted", accent:C.amber, bg:C.amberL, bdr:C.amberM, cls:"fu5",
-              primary:`Rs. ${data.predictions?.total?.toLocaleString() || 0}`, secondary:"Overall next month", chg:data.predictions?.totalChange || 0 },
+              primary:`Rs. ${nextElecBill.toLocaleString()}`, secondary:`${nextElecUnits} kWh est.` },
+            { icon:<FiBarChart2 size={17}/>, title:"Total Forecast", accent:C.amber, bg:C.amberL, bdr:C.amberM, cls:"fu5",
+              primary:`Rs. ${nextTotal.toLocaleString()}`, secondary:`Projected ${nextMonthLabel} total` },
           ].map((s,i) => (
             <div key={i} className={`fu db-hover ${s.cls}`} style={{ background:C.card,
               border:`1px solid ${s.bdr}`, borderRadius:14, overflow:"hidden",
@@ -338,7 +455,6 @@ export default function Dashboard() {
                   <div style={{ width:36, height:36, borderRadius:9, background:s.bg,
                     border:`1px solid ${s.bdr}`, display:"flex", alignItems:"center",
                     justifyContent:"center", color:s.accent }}>{s.icon}</div>
-                  <Badge val={s.chg}/>
                 </div>
                 <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
                   <p style={{ fontSize:"0.67rem", fontWeight:800, color:C.muted, letterSpacing:"0.1em",
@@ -355,52 +471,58 @@ export default function Dashboard() {
           ))}
         </div>
 
-        {/* PREDICTION TABLE */}
-        <Label mb={12}>Next Month Prediction</Label>
+        {/* COMPARISON TABLE */}
+        <Label mb={12}>Monthly Comparison</Label>
         <div className="fu fu3" style={{ marginBottom:32 }}>
           <Card style={{ padding:0 }}>
             <div style={{ padding:"18px 24px 16px", borderBottom:`1px solid ${C.border}`,
               display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
               <div>
-                <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 2px" }}>Forecast Breakdown</h3>
+                <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 2px" }}>Bill Comparison</h3>
                 <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>
-                  Predicted usage & billing for next month — based on 6-month trend analysis
+                  Actual vs Predicted vs Forecast
                 </p>
               </div>
               <div style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 10px",
                 background:C.blueL, border:`1px solid ${C.blueM}`, borderRadius:8 }}>
                 <FiInfo size={12} color={C.blue}/>
-                <span style={{ fontSize:"0.7rem", fontWeight:600, color:C.blue }}>Confidence: High</span>
+                <span style={{ fontSize:"0.7rem", fontWeight:600, color:C.blue }}>Confidence: {data.predictions?.confidence || "Medium"}</span>
               </div>
             </div>
             <div style={{ overflowX:"auto" }}>
               <table style={{ width:"100%", borderCollapse:"collapse", fontFamily:F }}>
                 <thead>
                   <tr style={{ background:C.hover }}>
-                    {["Utility","Current Month","","Predicted Next Month","Change"].map((h,i) => (
-                      <th key={i} style={{ padding:"10px 20px", fontSize:"0.67rem", fontWeight:800,
-                        color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em",
-                        textAlign:i===0?"left":"right", borderBottom:`1px solid ${C.border}`,
-                        whiteSpace:"nowrap" }}>{h}</th>
-                    ))}
+                    <th style={{ padding:"10px 20px", textAlign:"left", fontSize:"0.67rem", fontWeight:800,
+                      color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}>Utility</th>
+                    <th style={{ padding:"10px 20px", textAlign:"right", fontSize:"0.67rem", fontWeight:800,
+                      color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}>{previousMonthLabel} (Actual)</th>
+                    <th style={{ padding:"10px 20px", textAlign:"center", fontSize:"0.67rem", fontWeight:800,
+                      color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}></th>
+                    <th style={{ padding:"10px 20px", textAlign:"right", fontSize:"0.67rem", fontWeight:800,
+                      color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}>{currentMonthLabel} (Predicted)</th>
+                    <th style={{ padding:"10px 20px", textAlign:"center", fontSize:"0.67rem", fontWeight:800,
+                      color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}></th>
+                    <th style={{ padding:"10px 20px", textAlign:"right", fontSize:"0.67rem", fontWeight:800,
+                      color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}>{nextMonthLabel} (Forecast)</th>
+                    <th style={{ padding:"10px 20px", textAlign:"right", fontSize:"0.67rem", fontWeight:800,
+                      color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}>Change</th>
                   </tr>
                 </thead>
                 <tbody>
                   {[
                     { icon:<FiDroplet size={15}/>, label:"Water", accent:C.teal, bg:C.tealL, bdr:C.tealM,
-                      curUnits:`${data.current?.water || 0} Units`, curBill:`Rs. ${data.current?.waterBill?.toLocaleString() || 0}`,
-                      predUnits:`${data.predictions?.water || 0} Units`, predBill:`Rs. ${data.predictions?.waterBill?.toLocaleString() || 0}`,
-                      unitsChg:data.predictions?.waterUnitsChange || 0, billChg:data.predictions?.waterBillChange || 0 },
+                      actualUnits:`${previousWaterUnits} Units`, actualBill:`Rs. ${previousWaterBill.toLocaleString()}`,
+                      predUnits:`${predictedWaterUnits} Units`, predBill:`Rs. ${predictedWaterBill.toLocaleString()}`,
+                      forecastUnits:`${nextWaterUnits} Units`, forecastBill:`Rs. ${nextWaterBill.toLocaleString()}`,
+                      change:predictedWaterChange },
                     { icon:<FiZap size={15}/>, label:"Electricity", accent:C.blue, bg:C.blueL, bdr:C.blueM,
-                      curUnits:`${data.current?.elec || 0} kWh`, curBill:`Rs. ${data.current?.elecBill?.toLocaleString() || 0}`,
-                      predUnits:`${data.predictions?.elec || 0} kWh`, predBill:`Rs. ${data.predictions?.elecBill?.toLocaleString() || 0}`,
-                      unitsChg:data.predictions?.elecUnitsChange || 0, billChg:data.predictions?.elecBillChange || 0 },
-                    { icon:<FiActivity size={15}/>, label:"Fixed Fees", accent:C.violet, bg:C.violetL, bdr:C.violetM,
-                      curUnits:"—", curBill:`Rs. ${data.current?.fixedFees?.toLocaleString() || 0}`,
-                      predUnits:"—", predBill:`Rs. ${data.predictions?.fixedFees?.toLocaleString() || 0}`,
-                      unitsChg:null, billChg:data.predictions?.fixedFeesChange || 0 },
-                  ].map((row,i) => (
-                    <tr key={i} style={{ borderBottom:`1px solid ${C.border}` }}>
+                      actualUnits:`${previousElecUnits} kWh`, actualBill:`Rs. ${previousElecBill.toLocaleString()}`,
+                      predUnits:`${predictedElecUnits} kWh`, predBill:`Rs. ${predictedElecBill.toLocaleString()}`,
+                      forecastUnits:`${nextElecUnits} kWh`, forecastBill:`Rs. ${nextElecBill.toLocaleString()}`,
+                      change:predictedElecChange },
+                  ].map((row, idx) => (
+                    <tr key={idx} style={{ borderBottom:`1px solid ${C.border}` }}>
                       <td style={{ padding:"14px 20px" }}>
                         <div style={{ display:"flex", alignItems:"center", gap:9 }}>
                           <div style={{ width:32, height:32, borderRadius:8, background:row.bg,
@@ -410,21 +532,21 @@ export default function Dashboard() {
                         </div>
                       </td>
                       <td style={{ padding:"14px 20px", textAlign:"right" }}>
-                        <p style={{ fontSize:"0.85rem", fontWeight:700, color:C.ink, margin:"0 0 2px" }}>{row.curBill}</p>
-                        <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{row.curUnits}</p>
+                        <p style={{ fontSize:"0.85rem", fontWeight:700, color:C.ink, margin:"0 0 2px" }}>{row.actualBill}</p>
+                        <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{row.actualUnits}</p>
                       </td>
                       <td style={{ padding:"14px 10px", textAlign:"center" }}><FiChevronRight size={14} color={C.faint}/></td>
                       <td style={{ padding:"14px 20px", textAlign:"right" }}>
                         <p style={{ fontSize:"0.85rem", fontWeight:700, color:C.blue, margin:"0 0 2px" }}>{row.predBill}</p>
                         <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{row.predUnits}</p>
                       </td>
+                      <td style={{ padding:"14px 10px", textAlign:"center" }}><FiChevronRight size={14} color={C.faint}/></td>
                       <td style={{ padding:"14px 20px", textAlign:"right" }}>
-                        <Badge val={row.billChg}/>
-                        {row.unitsChg !== null && (
-                          <p style={{ fontSize:"0.68rem", color:C.faint, margin:"3px 0 0", textAlign:"right" }}>
-                            Units: {row.unitsChg > 0 ? "+" : ""}{row.unitsChg}%
-                          </p>
-                        )}
+                        <p style={{ fontSize:"0.85rem", fontWeight:700, color:C.violet, margin:"0 0 2px" }}>{row.forecastBill}</p>
+                        <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{row.forecastUnits}</p>
+                      </td>
+                      <td style={{ padding:"14px 20px", textAlign:"right" }}>
+                        <Badge val={row.change}/>
                       </td>
                     </tr>
                   ))}
@@ -434,45 +556,28 @@ export default function Dashboard() {
                     borderBottom:`1px solid ${C.blue}30`
                   }}>
                     <td style={{ padding:"16px 20px" }}>
-                      <span style={{ fontSize:"0.875rem", fontWeight:800, color:C.ink }}>Total Estimated Bill</span>
+                      <span style={{ fontSize:"0.875rem", fontWeight:800, color:C.ink }}>Total</span>
                     </td>
                     <td style={{ padding:"16px 20px", textAlign:"right" }}>
-                      <span style={{ fontSize:"0.925rem", fontWeight:700, color:C.ink }}>Rs. {data.current?.total?.toLocaleString() || 0}</span>
+                      <span style={{ fontSize:"0.925rem", fontWeight:700, color:C.ink }}>Rs. {previousTotal.toLocaleString()}</span>
                     </td>
-                    <td style={{ padding:"16px 10px", textAlign:"center" }}><FiChevronRight size={14} color={C.blue}/></td>
+                    <td style={{ padding:"16px 10px", textAlign:"center" }}><FiChevronRight size={14} color={C.faint}/></td>
                     <td style={{ padding:"16px 20px", textAlign:"right" }}>
-                      <span style={{ fontSize:"1rem", fontWeight:800, color:C.blue, letterSpacing:"-0.02em" }}>
-                        Rs. {data.predictions?.total?.toLocaleString() || 0}
-                      </span>
+                      <span style={{ fontSize:"0.925rem", fontWeight:700, color:C.blue }}>Rs. {predictedTotal.toLocaleString()}</span>
                     </td>
-                    <td style={{ padding:"16px 20px", textAlign:"right" }}><Badge val={data.predictions?.totalChange || 0}/></td>
+                    <td style={{ padding:"16px 10px", textAlign:"center" }}><FiChevronRight size={14} color={C.faint}/></td>
+                    <td style={{ padding:"16px 20px", textAlign:"right" }}>
+                      <span style={{ fontSize:"0.925rem", fontWeight:700, color:C.violet }}>Rs. {nextTotal.toLocaleString()}</span>
+                    </td>
+                    <td style={{ padding:"16px 20px", textAlign:"right" }}><Badge val={predictedTotalChange}/></td>
                   </tr>
                 </tbody>
               </table>
             </div>
-            <div style={{ padding:"16px 24px", borderTop:`1px solid ${C.border}`, background:C.hover,
-              display:"flex", gap:24, flexWrap:"wrap", alignItems:"center" }}>
-              <p style={{ fontSize:"0.72rem", color:C.muted, margin:0, flex:1 }}>📈 Bill trend over last 6 months</p>
-              <div style={{ flex:2, minWidth:200 }}>
-                <ResponsiveContainer width="100%" height={40}>
-                  <AreaChart data={data.trends || []} margin={{ top:4, right:4, left:4, bottom:4 }}>
-                    <defs>
-                      <linearGradient id="trendGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={C.blue} stopOpacity={0.2}/>
-                        <stop offset="95%" stopColor={C.blue} stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <Area type="monotone" dataKey="total" stroke={C.blue} strokeWidth={2}
-                      fill="url(#trendGrad)" dot={false}/>
-                    <ReferenceLine x="Dec*" stroke={C.blue} strokeDasharray="3 3" strokeOpacity={0.5}/>
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </div>
           </Card>
         </div>
 
-        {/* ANALYTICS */}
+        {/* ANALYTICS CHARTS */}
         <Label mb={12}>Analytics &amp; Trends</Label>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(420px,1fr))", gap:20, marginBottom:20 }}>
           <ChartCard title="Monthly Usage Trend" sub="Water & Electricity — last 6 months"
@@ -538,7 +643,7 @@ export default function Dashboard() {
               border:`1px solid ${C.amberM}`, borderRadius:9, display:"flex", gap:8, alignItems:"flex-start" }}>
               <FiAlertTriangle size={13} color={C.amber} style={{ marginTop:1, flexShrink:0 }}/>
               <p style={{ fontSize:"0.72rem", color:C.body, margin:0, lineHeight:1.55 }}>
-                <strong>Highest month</strong> predicted next month. Review your usage patterns.
+                <strong>AI Analysis:</strong> Your usage shows seasonal patterns. ML predictions help you plan ahead.
               </p>
             </div>
           </ChartCard>
@@ -575,7 +680,7 @@ export default function Dashboard() {
                 <div style={{ marginTop:14, padding:"10px 12px", background:C.blueL,
                   border:`1px solid ${C.blueM}`, borderRadius:8 }}>
                   <p style={{ fontSize:"0.7rem", color:C.blue, margin:0, lineHeight:1.55, fontWeight:500 }}>
-                    💡 Electricity is your biggest cost driver. Shifting to off-peak hours can save ~15%.
+                    💡 Electricity is your biggest cost driver. ML predictions help you optimize usage.
                   </p>
                 </div>
               </div>
@@ -631,6 +736,7 @@ export default function Dashboard() {
         </div>
 
       </div>
+      <BudgetInfoModal />
     </div>
   );
 }
