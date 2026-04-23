@@ -1,5 +1,5 @@
 // src/pages/Prediction.jsx
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine,
@@ -9,6 +9,7 @@ import {
   FiBarChart2, FiStar, FiTrendingUp, FiInfo, FiShield,
 } from "react-icons/fi";
 import { useTheme } from "../context/ThemeContext";
+import { predictionsAPI } from "../services/api";
 
 /* ─── Font (shared with dashboard) ─── */
 if (!document.getElementById("db-font")) {
@@ -34,35 +35,6 @@ if (!document.getElementById("pred-anim")) {
 }
 
 const F = "'Plus Jakarta Sans',-apple-system,sans-serif";
-
-/* ════ INITIAL DATA (Mock data - will be replaced by ML later) ════ */
-const INITIAL_BILLS = [
-  { id:1,  utilityType:"Electricity", billingMonth:"June 2025",      unitsUsed:320, billAmount:2750 },
-  { id:2,  utilityType:"Water",       billingMonth:"June 2025",      unitsUsed:22,  billAmount:880  },
-  { id:3,  utilityType:"Electricity", billingMonth:"July 2025",      unitsUsed:345, billAmount:2950 },
-  { id:4,  utilityType:"Water",       billingMonth:"July 2025",      unitsUsed:24,  billAmount:960  },
-  { id:5,  utilityType:"Electricity", billingMonth:"August 2025",    unitsUsed:380, billAmount:3250 },
-  { id:6,  utilityType:"Water",       billingMonth:"August 2025",    unitsUsed:26,  billAmount:1040 },
-  { id:7,  utilityType:"Electricity", billingMonth:"September 2025", unitsUsed:350, billAmount:3000 },
-  { id:8,  utilityType:"Water",       billingMonth:"September 2025", unitsUsed:23,  billAmount:920  },
-  { id:9,  utilityType:"Electricity", billingMonth:"October 2025",   unitsUsed:330, billAmount:2820 },
-  { id:10, utilityType:"Water",       billingMonth:"October 2025",   unitsUsed:21,  billAmount:840  },
-  { id:11, utilityType:"Electricity", billingMonth:"November 2025",  unitsUsed:310, billAmount:2650 },
-  { id:12, utilityType:"Water",       billingMonth:"November 2025",  unitsUsed:20,  billAmount:800  },
-  { id:13, utilityType:"Internet",    billingMonth:"June 2025",      unitsUsed:0,   billAmount:3500 },
-  { id:14, utilityType:"Internet",    billingMonth:"July 2025",      unitsUsed:0,   billAmount:3500 },
-  { id:15, utilityType:"Internet",    billingMonth:"August 2025",    unitsUsed:0,   billAmount:4200 },
-  { id:16, utilityType:"Internet",    billingMonth:"September 2025", unitsUsed:0,   billAmount:4200 },
-  { id:17, utilityType:"Internet",    billingMonth:"October 2025",   unitsUsed:0,   billAmount:4200 },
-  { id:18, utilityType:"Internet",    billingMonth:"November 2025",  unitsUsed:0,   billAmount:4200 },
-];
-
-// Get next month for prediction
-const getNextMonth = () => {
-  const now = new Date();
-  const next = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  return next.toLocaleDateString("en-US", { month: "long", year: "numeric" });
-};
 
 /* ════ MAIN COMPONENT ════ */
 const Prediction = () => {
@@ -111,192 +83,151 @@ const Prediction = () => {
     Internet:    { color:C.indigo, bg:C.indigoL, bdr:C.indigoM, icon:(s)=><FiWifi size={s}/>,     unit:"Flat-rate", flatRate:true },
   };
 
-  const [billsData] = useState(INITIAL_BILLS);
+  // ── State for API data ──
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedUtility, setSelectedUtility] = useState("Electricity");
-  const [predictionMethod, setPredictionMethod] = useState("average");
+  const [predictionMethod, setPredictionMethod] = useState("simple");
+  
+  const [predictionData, setPredictionData] = useState(null);
+  const [historyData, setHistoryData] = useState(null);
+  const [chartData, setChartData] = useState([]);
 
   const meta = UTIL_META[selectedUtility];
-  const utilColor = meta.color;
-  const utilUnit = meta.unit;
-  const isFlat = meta.flatRate;
+  const utilColor = meta?.color || C.blue;
+  const utilUnit = meta?.unit || "";
+  const isFlat = meta?.flatRate || false;
 
-  const filteredData = useMemo(
-    () => billsData.filter(b => b.utilityType === selectedUtility),
-    [billsData, selectedUtility]
-  );
-
-  /* ── Prediction logic ── */
-  const prediction = useMemo(() => {
-    if (!filteredData.length) return {
-      predictedUnits:0, predictedAmount:0,
-      percentChange:0, amountChange:0,
-      confidence:"Low", explanation:"Not enough data.",
-    };
-
-    let predictedUnits, predictedAmount;
-
-    if (isFlat) {
-      if (predictionMethod === "average") {
-        predictedAmount = Math.round(filteredData.reduce((s,b)=>s+b.billAmount,0)/filteredData.length);
-      } else if (predictionMethod === "weighted") {
-        let wa=0, ws=0;
-        filteredData.forEach((b,i) => { const w=i+1; wa+=b.billAmount*w; ws+=w; });
-        predictedAmount = Math.round(wa/ws);
-      } else {
-        const n=filteredData.length;
-        if (n<2) {
-          predictedAmount = Math.round(filteredData.reduce((s,b)=>s+b.billAmount,0)/n);
-        } else {
-          const xs=Array.from({length:n},(_,i)=>i);
-          const xSum=xs.reduce((s,x)=>s+x,0), x2Sum=xs.reduce((s,x)=>s+x*x,0);
-          const yA=filteredData.map(b=>b.billAmount), yASum=yA.reduce((s,y)=>s+y,0);
-          const xyA=xs.reduce((s,x,i)=>s+x*yA[i],0);
-          const sA=(n*xyA-xSum*yASum)/(n*x2Sum-xSum*xSum), iA=(yASum-sA*xSum)/n;
-          predictedAmount = Math.round(sA*n+iA);
-        }
-      }
-      predictedUnits = 0;
-    } else {
-      if (predictionMethod === "average") {
-        predictedUnits  = Math.round(filteredData.reduce((s,b)=>s+b.unitsUsed,  0)/filteredData.length);
-        predictedAmount = Math.round(filteredData.reduce((s,b)=>s+b.billAmount, 0)/filteredData.length);
-      } else if (predictionMethod === "weighted") {
-        let wu=0, wa=0, ws=0;
-        filteredData.forEach((b,i) => { const w=i+1; wu+=b.unitsUsed*w; wa+=b.billAmount*w; ws+=w; });
-        predictedUnits  = Math.round(wu/ws);
-        predictedAmount = Math.round(wa/ws);
-      } else {
-        const n=filteredData.length;
-        if (n<2) {
-          predictedUnits  = Math.round(filteredData.reduce((s,b)=>s+b.unitsUsed, 0)/n);
-          predictedAmount = Math.round(filteredData.reduce((s,b)=>s+b.billAmount,0)/n);
-        } else {
-          const xs=Array.from({length:n},(_,i)=>i);
-          const xSum=xs.reduce((s,x)=>s+x,0), x2Sum=xs.reduce((s,x)=>s+x*x,0);
-          const yU=filteredData.map(b=>b.unitsUsed),  yA=filteredData.map(b=>b.billAmount);
-          const yUSum=yU.reduce((s,y)=>s+y,0),        yASum=yA.reduce((s,y)=>s+y,0);
-          const xyU=xs.reduce((s,x,i)=>s+x*yU[i],0), xyA=xs.reduce((s,x,i)=>s+x*yA[i],0);
-          const sU=(n*xyU-xSum*yUSum)/(n*x2Sum-xSum*xSum), iU=(yUSum-sU*xSum)/n;
-          const sA=(n*xyA-xSum*yASum)/(n*x2Sum-xSum*xSum), iA=(yASum-sA*xSum)/n;
-          predictedUnits  = Math.round(sU*n+iU);
-          predictedAmount = Math.round(sA*n+iA);
-        }
-      }
-    }
-
-    const last         = filteredData[filteredData.length-1];
-    const percentChange= (!isFlat && last) ? Math.round(((predictedUnits-last.unitsUsed)/last.unitsUsed)*100) : 0;
-    const amountChange = last ? Math.round(((predictedAmount-last.billAmount)/last.billAmount)*100) : 0;
-    const confidence   = filteredData.length<2?"Low":filteredData.length<4?"Medium":"High";
-
-    let explanation = predictionMethod==="average"
-      ? `Based on the simple average of all ${filteredData.length} months equally.`
-      : predictionMethod==="weighted"
-      ? `Recent months carry more weight, making this estimate forward-leaning.`
-      : `Linear regression across ${filteredData.length} data points extrapolates the trend.`;
-
-    if (isFlat) {
-      explanation += " Internet is billed at a flat rate — only the monthly fee is predicted.";
-    } else if (filteredData.length >= 6) {
-      const highest = filteredData.reduce((m,b)=>b.unitsUsed>m.unitsUsed?b:m,filteredData[0]);
-      const lowest  = filteredData.reduce((m,b)=>b.unitsUsed<m.unitsUsed?b:m,filteredData[0]);
-      if (highest.unitsUsed/lowest.unitsUsed > 1.3)
-        explanation += ` Seasonal variation detected — peak was ${highest.billingMonth}.`;
-    }
-
-    return { predictedUnits, predictedAmount, percentChange, amountChange, confidence, explanation };
-  }, [filteredData, predictionMethod, isFlat]);
-
-  const nextMonthLabel = getNextMonth();
-
-  const chartData = useMemo(() => {
-    const data = filteredData.map(b => ({
-      month:          b.billingMonth.split(" ")[0].slice(0,3)+" '"+b.billingMonth.split(" ")[1].slice(2),
-      units:          isFlat ? null : b.unitsUsed,
-      amount:         b.billAmount,
-      forecast:       null,
-      forecastAmount: null,
-    }));
-    const last = filteredData[filteredData.length-1];
-    if (last) {
-      data[data.length-1] = {
-        ...data[data.length-1],
-        forecast:       isFlat ? null : last.unitsUsed,
-        forecastAmount: last.billAmount,
-      };
-      const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-      const [mn,yr] = last.billingMonth.split(" ");
-      const ni=(months.indexOf(mn)+1)%12, ny=ni===0?parseInt(yr)+1:yr;
-      data.push({
-        month:          months[ni].slice(0,3)+" '"+String(ny).slice(2)+" ›",
-        units:null, amount:null,
-        forecast:       isFlat ? null : prediction.predictedUnits,
-        forecastAmount: prediction.predictedAmount,
+  // Fetch prediction data from API
+  const fetchPredictionData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Fetch next month prediction
+      const predRes = await predictionsAPI.getNextMonth({ 
+        utility: selectedUtility, 
+        method: predictionMethod 
       });
+      
+      // Fetch historical data for charts
+      const histRes = await predictionsAPI.getHistory({ 
+        utility: selectedUtility 
+      });
+      
+      if (predRes.data?.success && predRes.data.predictions) {
+        setPredictionData(predRes.data.predictions);
+      } else if (predRes.data?.message) {
+        setError(predRes.data.message);
+      }
+      
+      if (histRes.data?.success && histRes.data.history) {
+        setHistoryData(histRes.data.history);
+       // Build chart data from history
+const { usageData, billData } = histRes.data.history;
+const maxLength = Math.max(usageData?.length || 0, billData?.length || 0);
+const combined = [];
+
+for (let i = 0; i < maxLength; i++) {
+  combined.push({
+    month: usageData?.[i]?.month || billData?.[i]?.month,
+    units: usageData?.[i]?.units || null,
+    amount: billData?.[i]?.amount || null,
+    forecast: null,
+    forecastAmount: null,
+  });
+}
+        
+        // Add forecast point if prediction exists
+        if (predRes.data?.predictions) {
+          const pred = predRes.data.predictions;
+          const nextMonthLabel = pred.nextMonth || "Next Month";
+          const shortMonth = nextMonthLabel.split(" ")[0].slice(0,3) + " '" + nextMonthLabel.split(" ")[1]?.slice(2);
+          
+          combined.push({
+            month: shortMonth + " ›",
+            units: isFlat ? null : pred.predictedUnits,
+            amount: null,
+            forecast: isFlat ? null : pred.predictedUnits,
+            forecastAmount: pred.predictedAmount,
+          });
+          
+          // Also mark last actual as forecast start
+          if (combined.length > 1) {
+            combined[combined.length - 2] = {
+              ...combined[combined.length - 2],
+              forecast: isFlat ? null : (usageData?.[usageData.length - 1]?.units || 0),
+              forecastAmount: billData?.[billData.length - 1]?.amount || 0,
+            };
+          }
+        }
+        
+        setChartData(combined);
+      }
+    } catch (err) {
+      console.error("Fetch prediction error:", err);
+      setError("Failed to load prediction data. Please try again.");
+    } finally {
+      setLoading(false);
     }
-    return data;
-  }, [filteredData, prediction, isFlat]);
+  }, [selectedUtility, predictionMethod, isFlat]);
 
-  const stats = useMemo(() => {
-    if (filteredData.length < 2) return null;
-    const amounts = filteredData.map(b=>b.billAmount);
-    const avgAmt  = Math.round(amounts.reduce((s,v)=>s+v,0)/amounts.length);
-    const totalSpend = amounts.reduce((s,v)=>s+v,0);
+  // Fetch data when dependencies change
+  useEffect(() => {
+    fetchPredictionData();
+  }, [fetchPredictionData]);
 
-    if (isFlat) {
+  // Get prediction values from state
+  const prediction = useMemo(() => {
+    if (!predictionData) {
       return {
-        avgAmt, totalSpend, overallTrend: null,
-        maxAmt:  Math.max(...amounts), minAmt: Math.min(...amounts),
-        maxAmtMonth: filteredData.reduce((m,b)=>b.billAmount>m.billAmount?b:m,filteredData[0]).billingMonth,
-        minAmtMonth: filteredData.reduce((m,b)=>b.billAmount<m.billAmount?b:m,filteredData[0]).billingMonth,
+        predictedUnits: 0,
+        predictedAmount: 0,
+        percentChange: 0,
+        amountChange: 0,
+        confidence: "Low",
+        explanation: "No data available.",
+        currentUnits: 0,
+        currentAmount: 0,
+        dataPoints: 0
       };
     }
+    return predictionData;
+  }, [predictionData]);
 
-    const units = filteredData.map(b=>b.unitsUsed);
-    const avgUnit = Math.round(units.reduce((s,v)=>s+v,0)/units.length);
-    const costPerUnit = filteredData[filteredData.length-1]
-      ? (filteredData[filteredData.length-1].billAmount/filteredData[filteredData.length-1].unitsUsed).toFixed(2) : 0;
-    const recent = filteredData.slice(-3).reduce((s,b)=>s+b.unitsUsed,0)/Math.min(3,filteredData.length);
-    const older  = filteredData.slice(0,3).reduce((s,b)=>s+b.unitsUsed,0)/Math.min(3,filteredData.length);
-    const overallTrend = Math.round(((recent-older)/older)*100);
-    return {
-      avgAmt, avgUnit, totalSpend, costPerUnit, overallTrend,
-      maxAmt:  Math.max(...amounts), minAmt: Math.min(...amounts),
-      maxUnit: Math.max(...units),   minUnit: Math.min(...units),
-      maxAmtMonth:  filteredData.reduce((m,b)=>b.billAmount>m.billAmount?b:m,filteredData[0]).billingMonth,
-      minAmtMonth:  filteredData.reduce((m,b)=>b.billAmount<m.billAmount?b:m,filteredData[0]).billingMonth,
-      maxUnitMonth: filteredData.reduce((m,b)=>b.unitsUsed>m.unitsUsed?b:m,filteredData[0]).billingMonth,
-      minUnitMonth: filteredData.reduce((m,b)=>b.unitsUsed<m.unitsUsed?b:m,filteredData[0]).billingMonth,
-    };
-  }, [filteredData, isFlat]);
+  // Get stats from history
+  const stats = useMemo(() => {
+    if (!historyData?.stats) return null;
+    return historyData.stats;
+  }, [historyData]);
 
-  const confColor = { Low:C.red, Medium:C.amber, High:C.green }[prediction.confidence];
-  const isUp      = prediction.percentChange > 0;
-  const isAmtUp   = prediction.amountChange  > 0;
+  const nextMonthLabel = prediction.nextMonth || "Next Month";
+  const confColor = { Low: C.red, Medium: C.amber, High: C.green }[prediction.confidence] || C.muted;
+  const isUp = prediction.percentChange > 0;
+  const isAmtUp = prediction.amountChange > 0;
 
   // CustomTooltip inside component so it can access C
   const CustomTooltip = ({ active, payload, label }) => {
     if (!active || !payload?.length) return null;
     const isForecast = label?.includes("›");
     return (
-      <div style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:12,
-        padding:"12px 16px", boxShadow:C.s3, fontFamily:F, minWidth:180 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:8 }}>
-          <span style={{ fontSize:"0.78rem", fontWeight:700, color:C.ink }}>
-            {label?.replace(" ›","")}
+      <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
+        padding: "12px 16px", boxShadow: C.s3, fontFamily: F, minWidth: 180 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+          <span style={{ fontSize: "0.78rem", fontWeight: 700, color: C.ink }}>
+            {label?.replace(" ›", "")}
           </span>
           {isForecast && (
-            <span style={{ fontSize:"0.65rem", fontWeight:700, background:C.violetL,
-              color:C.violet, border:`1px solid ${C.violetM}`, padding:"1px 7px", borderRadius:20 }}>
+            <span style={{ fontSize: "0.65rem", fontWeight: 700, background: C.violetL,
+              color: C.violet, border: `1px solid ${C.violetM}`, padding: "1px 7px", borderRadius: 20 }}>
               Forecast
             </span>
           )}
         </div>
-        {payload.filter(p => p.value !== null).map((p,i) => (
-          <div key={i} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:i<payload.length-1?4:0 }}>
-            <span style={{ width:8, height:8, borderRadius:2, background:p.color, display:"inline-block" }}/>
-            <span style={{ fontSize:"0.75rem", color:C.muted, flex:1 }}>{p.name}</span>
-            <span style={{ fontSize:"0.8rem", fontWeight:700, color:C.ink }}>
+        {payload.filter(p => p.value !== null).map((p, i) => (
+          <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: i < payload.length - 1 ? 4 : 0 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, background: p.color, display: "inline-block" }}/>
+            <span style={{ fontSize: "0.75rem", color: C.muted, flex: 1 }}>{p.name}</span>
+            <span style={{ fontSize: "0.8rem", fontWeight: 700, color: C.ink }}>
               {p.name === "Usage" ? `${p.value} ${utilUnit}` : `Rs. ${p.value.toLocaleString()}`}
             </span>
           </div>
@@ -306,58 +237,70 @@ const Prediction = () => {
   };
 
   // ax object for charts
-  const ax = { fill:C.faint, fontSize:11, fontFamily:F };
+  const ax = { fill: C.faint, fontSize: 11, fontFamily: F };
 
-  if (filteredData.length === 0) {
+  if (loading) {
     return (
-      <div style={{ minHeight:"100vh", background:C.page, fontFamily:F,
-        color:C.ink, padding:"28px 32px 64px", transition:"background 0.3s ease, color 0.3s ease" }}>
-        <div className="p-fu p-fu1" style={{ display:"flex", alignItems:"flex-start",
-          justifyContent:"space-between", flexWrap:"wrap", gap:16, marginBottom:24 }}>
-          <div>
-            <h1 style={{ fontSize:"1.75rem", fontWeight:800, color:C.ink,
-              margin:"0 0 5px", letterSpacing:"-0.03em" }}>Bill Predictions</h1>
-            <p style={{ fontSize:"0.85rem", color:C.muted, margin:0 }}>
-              Estimate next month's consumption and cost from your historical data
-            </p>
+      <div style={{ minHeight: "100vh", background: C.page, fontFamily: F,
+        color: C.ink, padding: "28px 32px 64px", transition: "background 0.3s ease, color 0.3s ease" }}>
+        <div className="p-fu p-fu1" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, color: C.muted }}>
+            <div style={{ width: 18, height: 18, border: `2px solid ${C.border}`, borderTopColor: C.blue, borderRadius: "50%", animation: "spin 0.7s linear infinite" }}/>
+            Loading prediction data...
           </div>
         </div>
-        <div style={{ textAlign:"center", padding:"60px 40px", background:C.card,
-          borderRadius:18, border:`1px solid ${C.border}`, boxShadow:C.s1 }}>
-          <p style={{ fontSize:"2.5rem", margin:"0 0 12px" }}>📭</p>
-          <h3 style={{ fontSize:"1.2rem", color:C.ink, margin:"0 0 8px", fontWeight:700 }}>No Data Available</h3>
-          <p style={{ color:C.muted, margin:0 }}>Add some {selectedUtility.toLowerCase()} bills to generate predictions.</p>
+      </div>
+    );
+  }
+
+  if (error || (!predictionData && !loading)) {
+    return (
+      <div style={{ minHeight: "100vh", background: C.page, fontFamily: F,
+        color: C.ink, padding: "28px 32px 64px", transition: "background 0.3s ease, color 0.3s ease" }}>
+        <div className="p-fu p-fu1" style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "60vh", flexDirection: "column", gap: 16 }}>
+          <div style={{ textAlign: "center", padding: "60px 40px", background: C.card,
+            borderRadius: 18, border: `1px solid ${C.border}`, boxShadow: C.s1 }}>
+            <p style={{ fontSize: "2.5rem", margin: "0 0 12px" }}>📭</p>
+            <h3 style={{ fontSize: "1.2rem", color: C.ink, margin: "0 0 8px", fontWeight: 700 }}>No Data Available</h3>
+            <p style={{ color: C.muted, margin: 0 }}>{error || `Add some ${selectedUtility.toLowerCase()} bills to generate predictions.`}</p>
+            <button 
+              onClick={fetchPredictionData}
+              style={{ marginTop: 20, padding: "8px 20px", borderRadius: 8, background: C.blue, color: "#fff", border: "none", cursor: "pointer" }}
+            >
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight:"100vh", background:C.page, fontFamily:F,
-      color:C.ink, padding:"28px 32px 64px", transition:"background 0.3s ease, color 0.3s ease" }}>
+    <div style={{ minHeight: "100vh", background: C.page, fontFamily: F,
+      color: C.ink, padding: "28px 32px 64px", transition: "background 0.3s ease, color 0.3s ease" }}>
 
       {/* HEADER */}
-      <div className="p-fu p-fu1" style={{ display:"flex", alignItems:"flex-start",
-        justifyContent:"space-between", flexWrap:"wrap", gap:16, marginBottom:24 }}>
+      <div className="p-fu p-fu1" style={{ display: "flex", alignItems: "flex-start",
+        justifyContent: "space-between", flexWrap: "wrap", gap: 16, marginBottom: 24 }}>
         <div>
-          <h1 style={{ fontSize:"1.75rem", fontWeight:800, color:C.ink,
-            margin:"0 0 5px", letterSpacing:"-0.03em" }}>Bill Predictions</h1>
-          <p style={{ fontSize:"0.85rem", color:C.muted, margin:0 }}>
+          <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: C.ink,
+            margin: "0 0 5px", letterSpacing: "-0.03em" }}>Bill Predictions</h1>
+          <p style={{ fontSize: "0.85rem", color: C.muted, margin: 0 }}>
             Estimate next month's consumption and cost from your historical data
           </p>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:12, background:C.card,
-          border:`1px solid ${C.border}`, borderRadius:14, padding:"12px 18px", boxShadow:C.s1 }}>
-          <div style={{ color:C.violet, display:"flex" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, background: C.card,
+          border: `1px solid ${C.border}`, borderRadius: 14, padding: "12px 18px", boxShadow: C.s1 }}>
+          <div style={{ color: C.violet, display: "flex" }}>
             <FiCalendar size={20}/>
           </div>
           <div>
-            <span style={{ display:"block", fontSize:"0.65rem", fontWeight:700,
-              color:C.faint, letterSpacing:"0.05em", textTransform:"uppercase" }}>
+            <span style={{ display: "block", fontSize: "0.65rem", fontWeight: 700,
+              color: C.faint, letterSpacing: "0.05em", textTransform: "uppercase" }}>
               Forecasting for
             </span>
-            <span style={{ display:"block", fontSize:"0.95rem", fontWeight:800,
-              color:C.ink, marginTop:1 }}>
+            <span style={{ display: "block", fontSize: "0.95rem", fontWeight: 800,
+              color: C.ink, marginTop: 1 }}>
               {nextMonthLabel}
             </span>
           </div>
@@ -365,46 +308,46 @@ const Prediction = () => {
       </div>
 
       {/* CONTROLS */}
-      <div className="p-fu p-fu2" style={{ display:"flex", alignItems:"center",
-        justifyContent:"space-between", flexWrap:"wrap", gap:14, marginBottom:22 }}>
+      <div className="p-fu p-fu2" style={{ display: "flex", alignItems: "center",
+        justifyContent: "space-between", flexWrap: "wrap", gap: 14, marginBottom: 22 }}>
 
-        <div style={{ display:"flex", background:C.card, border:`1px solid ${C.border}`,
-          borderRadius:12, padding:4, gap:3 }}>
+        <div style={{ display: "flex", background: C.card, border: `1px solid ${C.border}`,
+          borderRadius: 12, padding: 4, gap: 3 }}>
           {Object.entries(UTIL_META).map(([key, m]) => {
             const active = selectedUtility === key;
             return (
-              <button key={key} className={`p-util${active?" active":""}`}
+              <button key={key} className={`p-util${active ? " active" : ""}`}
                 onClick={() => setSelectedUtility(key)}
-                style={{ display:"flex", alignItems:"center", gap:7, padding:"8px 18px",
-                  borderRadius:9, border: active ? `1px solid ${m.bdr}` : "1px solid transparent",
+                style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 18px",
+                  borderRadius: 9, border: active ? `1px solid ${m.bdr}` : "1px solid transparent",
                   background: active ? m.bg : "transparent",
-                  color:      active ? m.color : C.muted,
-                  fontFamily:F, fontWeight:600, fontSize:"0.875rem",
-                  cursor:"pointer", transition:"all .15s" }}>
+                  color: active ? m.color : C.muted,
+                  fontFamily: F, fontWeight: 600, fontSize: "0.875rem",
+                  cursor: "pointer", transition: "all .15s" }}>
                 {m.icon(15)} {key}
               </button>
             );
           })}
         </div>
 
-        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <label style={{ fontSize:"0.78rem", fontWeight:600, color:C.muted }}>Method</label>
-          <div style={{ position:"relative" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          <label style={{ fontSize: "0.78rem", fontWeight: 600, color: C.muted }}>Method</label>
+          <div style={{ position: "relative" }}>
             <select value={predictionMethod}
               onChange={e => setPredictionMethod(e.target.value)}
-              style={{ padding:"8px 36px 8px 14px", borderRadius:10,
-                border:`1.5px solid ${C.border}`, background:C.card,
-                color:C.body, fontFamily:F, fontSize:"0.875rem", fontWeight:500,
-                cursor:"pointer", outline:"none", appearance:"none" }}
-              onFocus={e => { e.target.style.borderColor=C.blue; e.target.style.boxShadow=`0 0 0 3px ${C.blueM}55`; }}
-              onBlur={e  => { e.target.style.borderColor=C.border; e.target.style.boxShadow="none"; }}>
-              <option value="average">Simple Average</option>
+              style={{ padding: "8px 36px 8px 14px", borderRadius: 10,
+                border: `1.5px solid ${C.border}`, background: C.card,
+                color: C.body, fontFamily: F, fontSize: "0.875rem", fontWeight: 500,
+                cursor: "pointer", outline: "none", appearance: "none" }}
+              onFocus={e => { e.target.style.borderColor = C.blue; e.target.style.boxShadow = `0 0 0 3px ${C.blueM}55`; }}
+              onBlur={e => { e.target.style.borderColor = C.border; e.target.style.boxShadow = "none"; }}>
+              <option value="simple">Simple Average</option>
               <option value="weighted">Weighted Average</option>
               <option value="trend">Linear Trend</option>
             </select>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={C.faint}
               strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
-              style={{ position:"absolute", right:12, top:"50%", transform:"translateY(-50%)", pointerEvents:"none" }}>
+              style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }}>
               <polyline points="6 9 12 15 18 9"/>
             </svg>
           </div>
@@ -412,92 +355,92 @@ const Prediction = () => {
       </div>
 
       {/* HERO */}
-      <div className="p-fu p-fu3" style={{ display:"grid",
-        gridTemplateColumns:"1fr 1fr", gap:18, marginBottom:20 }}>
+      <div className="p-fu p-fu3" style={{ display: "grid",
+        gridTemplateColumns: "1fr 1fr", gap: 18, marginBottom: 20 }}>
 
         {/* Big bill card */}
         <div className="p-hbc"
-          style={{ background:C.card, border:`1px solid ${C.border}`,
-            borderTop:`4px solid ${utilColor}`, borderRadius:18,
-            padding:24, boxShadow:C.s2,
-            transition:"transform .22s ease, box-shadow .22s ease" }}>
-          <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:20 }}>
-            <div style={{ width:52, height:52, borderRadius:14,
-              background:`${utilColor}14`, display:"flex", alignItems:"center",
-              justifyContent:"center", color:utilColor, flexShrink:0 }}>
+          style={{ background: C.card, border: `1px solid ${C.border}`,
+            borderTop: `4px solid ${utilColor}`, borderRadius: 18,
+            padding: 24, boxShadow: C.s2,
+            transition: "transform .22s ease, box-shadow .22s ease" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
+            <div style={{ width: 52, height: 52, borderRadius: 14,
+              background: `${utilColor}14`, display: "flex", alignItems: "center",
+              justifyContent: "center", color: utilColor, flexShrink: 0 }}>
               {meta.icon(26)}
             </div>
             <div>
-              <div style={{ fontSize:"0.78rem", fontWeight:600, color:C.muted, marginBottom:4 }}>
+              <div style={{ fontSize: "0.78rem", fontWeight: 600, color: C.muted, marginBottom: 4 }}>
                 Predicted Bill · {nextMonthLabel}
               </div>
-              <div style={{ display:"flex", alignItems:"center", gap:5,
-                fontSize:"0.75rem", fontWeight:700, color:confColor }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 5,
+                fontSize: "0.75rem", fontWeight: 700, color: confColor }}>
                 <FiShield size={12}/> {prediction.confidence} Confidence
               </div>
             </div>
           </div>
 
-          <div style={{ display:"flex", alignItems:"baseline", gap:8, marginBottom:18 }}>
-            <span style={{ fontSize:"1.1rem", fontWeight:700, color:C.muted }}>Rs.</span>
-            <span style={{ fontSize:"3rem", fontWeight:800, color:C.ink,
-              letterSpacing:"-2px", lineHeight:1 }}>
-              {prediction.predictedAmount.toLocaleString()}
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginBottom: 18 }}>
+            <span style={{ fontSize: "1.1rem", fontWeight: 700, color: C.muted }}>Rs.</span>
+            <span style={{ fontSize: "3rem", fontWeight: 800, color: C.ink,
+              letterSpacing: "-2px", lineHeight: 1 }}>
+              {prediction.predictedAmount?.toLocaleString() || 0}
             </span>
           </div>
 
-          <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:18, flexWrap:"wrap" }}>
-            <span style={{ display:"inline-flex", alignItems:"center", gap:5,
-              padding:"5px 12px", borderRadius:20, fontSize:"0.75rem", fontWeight:700,
-              background:isAmtUp?C.redL:C.greenL,
-              border:`1px solid ${isAmtUp?C.redM:C.greenM}`,
-              color:isAmtUp?C.red:C.green }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 18, flexWrap: "wrap" }}>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5,
+              padding: "5px 12px", borderRadius: 20, fontSize: "0.75rem", fontWeight: 700,
+              background: isAmtUp ? C.redL : C.greenL,
+              border: `1px solid ${isAmtUp ? C.redM : C.greenM}`,
+              color: isAmtUp ? C.red : C.green }}>
               {isAmtUp ? <FiArrowUp size={11}/> : <FiArrowDown size={11}/>}
               {Math.abs(prediction.amountChange)}% vs last month
             </span>
-            <span style={{ fontSize:"0.8rem", color:C.faint }}>
-              Last month: Rs. {filteredData[filteredData.length-1]?.billAmount.toLocaleString()}
+            <span style={{ fontSize: "0.8rem", color: C.faint }}>
+              Last month: Rs. {prediction.currentAmount?.toLocaleString() || 0}
             </span>
           </div>
 
-          <div style={{ display:"flex", alignItems:"center", gap:5, flexWrap:"wrap" }}>
-            {[1,2,3,4,5,6].map(i => (
-              <span key={i} style={{ display:"inline-block", width:30, height:6,
-                borderRadius:3, background:filteredData.length>=i?confColor:C.border,
-                transition:"background .3s" }}/>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+            {[1, 2, 3, 4, 5, 6].map(i => (
+              <span key={i} style={{ display: "inline-block", width: 30, height: 6,
+                borderRadius: 3, background: (prediction.dataPoints || 0) >= i ? confColor : C.border,
+                transition: "background .3s" }}/>
             ))}
-            <span style={{ fontSize:"0.7rem", color:C.faint, marginLeft:4 }}>
-              {filteredData.length} months of data
+            <span style={{ fontSize: "0.7rem", color: C.faint, marginLeft: 4 }}>
+              {prediction.dataPoints || 0} months of data
             </span>
           </div>
         </div>
 
         {/* Side cards */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
           {!isFlat && (
             <div className="p-sc"
-              style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16,
-                padding:18, display:"flex", alignItems:"flex-start", gap:12, boxShadow:C.s1,
-                transition:"transform .15s, box-shadow .15s" }}>
-              <div style={{ width:38, height:38, borderRadius:10,
-                background:`${utilColor}12`, display:"flex", alignItems:"center",
-                justifyContent:"center", color:utilColor, flexShrink:0 }}>
+              style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16,
+                padding: 18, display: "flex", alignItems: "flex-start", gap: 12, boxShadow: C.s1,
+                transition: "transform .15s, box-shadow .15s" }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10,
+                background: `${utilColor}12`, display: "flex", alignItems: "center",
+                justifyContent: "center", color: utilColor, flexShrink: 0 }}>
                 {meta.icon(17)}
               </div>
               <div>
-                <span style={{ display:"block", fontSize:"0.65rem", fontWeight:700,
-                  color:C.faint, letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:4 }}>
+                <span style={{ display: "block", fontSize: "0.65rem", fontWeight: 700,
+                  color: C.faint, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>
                   Predicted Usage
                 </span>
-                <div style={{ fontSize:"1.25rem", fontWeight:800,
-                  letterSpacing:"-0.5px", marginBottom:4, color:utilColor }}>
-                  {prediction.predictedUnits}
-                  <span style={{ fontSize:"0.8rem", fontWeight:500, color:C.faint }}> {utilUnit}</span>
+                <div style={{ fontSize: "1.25rem", fontWeight: 800,
+                  letterSpacing: "-0.5px", marginBottom: 4, color: utilColor }}>
+                  {prediction.predictedUnits || 0}
+                  <span style={{ fontSize: "0.8rem", fontWeight: 500, color: C.faint }}> {utilUnit}</span>
                 </div>
-                <span style={{ display:"inline-flex", alignItems:"center", gap:3,
-                  fontSize:"0.68rem", fontWeight:700, padding:"2px 7px", borderRadius:20,
-                  background:isUp?C.redL:C.greenL, border:`1px solid ${isUp?C.redM:C.greenM}`,
-                  color:isUp?C.red:C.green }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: 3,
+                  fontSize: "0.68rem", fontWeight: 700, padding: "2px 7px", borderRadius: 20,
+                  background: isUp ? C.redL : C.greenL, border: `1px solid ${isUp ? C.redM : C.greenM}`,
+                  color: isUp ? C.red : C.green }}>
                   {isUp ? <FiArrowUp size={10}/> : <FiArrowDown size={10}/>}
                   {Math.abs(prediction.percentChange)}% vs last month
                 </span>
@@ -507,24 +450,24 @@ const Prediction = () => {
 
           {isFlat && (
             <div className="p-sc"
-              style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16,
-                padding:18, display:"flex", alignItems:"flex-start", gap:12, boxShadow:C.s1,
-                transition:"transform .15s, box-shadow .15s" }}>
-              <div style={{ width:38, height:38, borderRadius:10,
-                background:C.indigoL, display:"flex", alignItems:"center",
-                justifyContent:"center", color:C.indigo, flexShrink:0 }}>
+              style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16,
+                padding: 18, display: "flex", alignItems: "flex-start", gap: 12, boxShadow: C.s1,
+                transition: "transform .15s, box-shadow .15s" }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10,
+                background: C.indigoL, display: "flex", alignItems: "center",
+                justifyContent: "center", color: C.indigo, flexShrink: 0 }}>
                 <FiWifi size={17}/>
               </div>
               <div>
-                <span style={{ display:"block", fontSize:"0.65rem", fontWeight:700,
-                  color:C.faint, letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:4 }}>
+                <span style={{ display: "block", fontSize: "0.65rem", fontWeight: 700,
+                  color: C.faint, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>
                   Plan Type
                 </span>
-                <div style={{ fontSize:"1rem", fontWeight:800,
-                  letterSpacing:"-0.5px", marginBottom:4, color:C.indigo }}>
+                <div style={{ fontSize: "1rem", fontWeight: 800,
+                  letterSpacing: "-0.5px", marginBottom: 4, color: C.indigo }}>
                   Flat-rate
                 </div>
-                <span style={{ fontSize:"0.7rem", color:C.faint }}>No unit tracking</span>
+                <span style={{ fontSize: "0.7rem", color: C.faint }}>No unit tracking</span>
               </div>
             </div>
           )}
@@ -532,113 +475,100 @@ const Prediction = () => {
           {stats && (
             <>
               <div className="p-sc"
-                style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16,
-                  padding:18, display:"flex", alignItems:"flex-start", gap:12, boxShadow:C.s1,
-                  transition:"transform .15s, box-shadow .15s" }}>
-                <div style={{ width:38, height:38, borderRadius:10,
-                  background:C.amberL, display:"flex", alignItems:"center",
-                  justifyContent:"center", color:C.amber, flexShrink:0 }}>
+                style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16,
+                  padding: 18, display: "flex", alignItems: "flex-start", gap: 12, boxShadow: C.s1,
+                  transition: "transform .15s, box-shadow .15s" }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10,
+                  background: C.amberL, display: "flex", alignItems: "center",
+                  justifyContent: "center", color: C.amber, flexShrink: 0 }}>
                   <FiBarChart2 size={17}/>
                 </div>
                 <div>
-                  <span style={{ display:"block", fontSize:"0.65rem", fontWeight:700,
-                    color:C.faint, letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:4 }}>
+                  <span style={{ display: "block", fontSize: "0.65rem", fontWeight: 700,
+                    color: C.faint, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>
                     Avg Monthly Bill
                   </span>
-                  <div style={{ fontSize:"1.25rem", fontWeight:800,
-                    letterSpacing:"-0.5px", marginBottom:4, color:C.amber }}>
-                    Rs. {stats.avgAmt.toLocaleString()}
+                  <div style={{ fontSize: "1.25rem", fontWeight: 800,
+                    letterSpacing: "-0.5px", marginBottom: 4, color: C.amber }}>
+                    Rs. {stats.avgMonthlyBill?.toLocaleString() || 0}
                   </div>
-                  <span style={{ fontSize:"0.7rem", color:C.faint }}>
-                    Over {filteredData.length} months
+                  <span style={{ fontSize: "0.7rem", color: C.faint }}>
+                    Over {stats.totalBills || 0} months
                   </span>
                 </div>
               </div>
 
               {!isFlat && (
                 <div className="p-sc"
-                  style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16,
-                    padding:18, display:"flex", alignItems:"flex-start", gap:12, boxShadow:C.s1,
-                    transition:"transform .15s, box-shadow .15s" }}>
-                  <div style={{ width:38, height:38, borderRadius:10,
-                    background:C.greenL, display:"flex", alignItems:"center",
-                    justifyContent:"center", color:C.green, flexShrink:0 }}>
+                  style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16,
+                    padding: 18, display: "flex", alignItems: "flex-start", gap: 12, boxShadow: C.s1,
+                    transition: "transform .15s, box-shadow .15s" }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10,
+                    background: C.greenL, display: "flex", alignItems: "center",
+                    justifyContent: "center", color: C.green, flexShrink: 0 }}>
                     <FiStar size={17}/>
                   </div>
                   <div>
-                    <span style={{ display:"block", fontSize:"0.65rem", fontWeight:700,
-                      color:C.faint, letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:4 }}>
+                    <span style={{ display: "block", fontSize: "0.65rem", fontWeight: 700,
+                      color: C.faint, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>
                       Rate per {utilUnit}
                     </span>
-                    <div style={{ fontSize:"1.25rem", fontWeight:800,
-                      letterSpacing:"-0.5px", marginBottom:4, color:C.green }}>
-                      Rs. {stats.costPerUnit}
+                    <div style={{ fontSize: "1.25rem", fontWeight: 800,
+                      letterSpacing: "-0.5px", marginBottom: 4, color: C.green }}>
+                      Rs. {stats.costPerUnit || 0}
                     </div>
-                    <span style={{ fontSize:"0.7rem", color:C.faint }}>Based on last month</span>
+                    <span style={{ fontSize: "0.7rem", color: C.faint }}>Based on last month</span>
                   </div>
                 </div>
               )}
 
               {isFlat && stats.totalSpend && (
                 <div className="p-sc"
-                  style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16,
-                    padding:18, display:"flex", alignItems:"flex-start", gap:12, boxShadow:C.s1,
-                    transition:"transform .15s, box-shadow .15s" }}>
-                  <div style={{ width:38, height:38, borderRadius:10,
-                    background:C.greenL, display:"flex", alignItems:"center",
-                    justifyContent:"center", color:C.green, flexShrink:0 }}>
+                  style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16,
+                    padding: 18, display: "flex", alignItems: "flex-start", gap: 12, boxShadow: C.s1,
+                    transition: "transform .15s, box-shadow .15s" }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10,
+                    background: C.greenL, display: "flex", alignItems: "center",
+                    justifyContent: "center", color: C.green, flexShrink: 0 }}>
                     <FiStar size={17}/>
                   </div>
                   <div>
-                    <span style={{ display:"block", fontSize:"0.65rem", fontWeight:700,
-                      color:C.faint, letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:4 }}>
+                    <span style={{ display: "block", fontSize: "0.65rem", fontWeight: 700,
+                      color: C.faint, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>
                       Total Spent
                     </span>
-                    <div style={{ fontSize:"1.25rem", fontWeight:800,
-                      letterSpacing:"-0.5px", marginBottom:4, color:C.green }}>
-                      Rs. {stats.totalSpend.toLocaleString()}
+                    <div style={{ fontSize: "1.25rem", fontWeight: 800,
+                      letterSpacing: "-0.5px", marginBottom: 4, color: C.green }}>
+                      Rs. {stats.totalSpend?.toLocaleString() || 0}
                     </div>
-                    <span style={{ fontSize:"0.7rem", color:C.faint }}>All tracked months</span>
+                    <span style={{ fontSize: "0.7rem", color: C.faint }}>All tracked months</span>
                   </div>
                 </div>
               )}
 
               <div className="p-sc"
-                style={{ background:C.card, border:`1px solid ${C.border}`, borderRadius:16,
-                  padding:18, display:"flex", alignItems:"flex-start", gap:12, boxShadow:C.s1,
-                  transition:"transform .15s, box-shadow .15s",
+                style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 16,
+                  padding: 18, display: "flex", alignItems: "flex-start", gap: 12, boxShadow: C.s1,
+                  transition: "transform .15s, box-shadow .15s",
                   gridColumn: isFlat ? "1 / -1" : "auto" }}>
-                <div style={{ width:38, height:38, borderRadius:10,
-                  background:C.violetL, display:"flex", alignItems:"center",
-                  justifyContent:"center", color:C.violet, flexShrink:0 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10,
+                  background: C.violetL, display: "flex", alignItems: "center",
+                  justifyContent: "center", color: C.violet, flexShrink: 0 }}>
                   <FiTrendingUp size={17}/>
                 </div>
                 <div>
-                  <span style={{ display:"block", fontSize:"0.65rem", fontWeight:700,
-                    color:C.faint, letterSpacing:"0.08em", textTransform:"uppercase", marginBottom:4 }}>
+                  <span style={{ display: "block", fontSize: "0.65rem", fontWeight: 700,
+                    color: C.faint, letterSpacing: "0.08em", textTransform: "uppercase", marginBottom: 4 }}>
                     Overall Trend
                   </span>
-                  {(() => {
-                    const trend = isFlat
-                      ? (() => {
-                          const recent = filteredData.slice(-3).reduce((s,b)=>s+b.billAmount,0)/Math.min(3,filteredData.length);
-                          const older  = filteredData.slice(0,3).reduce((s,b)=>s+b.billAmount,0)/Math.min(3,filteredData.length);
-                          return Math.round(((recent-older)/older)*100);
-                        })()
-                      : stats.overallTrend;
-                    return (
-                      <>
-                        <div style={{ fontSize:"1.25rem", fontWeight:800,
-                          letterSpacing:"-0.5px", marginBottom:4,
-                          color:trend>0?C.red:C.green }}>
-                          {trend>0?"+":""}{trend}%
-                        </div>
-                        <span style={{ fontSize:"0.7rem", color:C.faint }}>
-                          {isFlat ? "Bill amount" : "Usage"} · recent vs earlier months
-                        </span>
-                      </>
-                    );
-                  })()}
+                  <div style={{ fontSize: "1.25rem", fontWeight: 800,
+                    letterSpacing: "-0.5px", marginBottom: 4,
+                    color: (stats.overallTrend || 0) > 0 ? C.red : (stats.overallTrend || 0) < 0 ? C.green : C.muted }}>
+                    {(stats.overallTrend || 0) > 0 ? "+" : ""}{stats.overallTrend || 0}%
+                  </div>
+                  <span style={{ fontSize: "0.7rem", color: C.faint }}>
+                    {isFlat ? "Bill amount" : "Usage"} · recent vs earlier months
+                  </span>
                 </div>
               </div>
             </>
@@ -647,129 +577,135 @@ const Prediction = () => {
       </div>
 
       {/* CHART */}
-      <div className="p-fu p-fu4" style={{ background:C.card, border:`1px solid ${C.border}`,
-        borderRadius:18, padding:"22px 24px", marginBottom:20, boxShadow:C.s1 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start",
-          flexWrap:"wrap", gap:12, marginBottom:18 }}>
+      <div className="p-fu p-fu4" style={{ background: C.card, border: `1px solid ${C.border}`,
+        borderRadius: 18, padding: "22px 24px", marginBottom: 20, boxShadow: C.s1 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+          flexWrap: "wrap", gap: 12, marginBottom: 18 }}>
           <div>
-            <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>
+            <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: C.ink, margin: "0 0 3px" }}>
               {isFlat ? "Bill History" : "Usage & Bill History"} — with {nextMonthLabel} Forecast
             </h3>
-            <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>
+            <p style={{ fontSize: "0.72rem", color: C.muted, margin: 0 }}>
               Shaded area is forecast · Dashed line marks the prediction boundary
             </p>
           </div>
-          <div style={{ display:"flex", alignItems:"center", gap:14,
-            fontSize:"0.72rem", color:C.muted, flexWrap:"wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14,
+            fontSize: "0.72rem", color: C.muted, flexWrap: "wrap" }}>
             {!isFlat && (
-              <span style={{ display:"flex", alignItems:"center", gap:5 }}>
-                <span style={{ width:10, height:10, borderRadius:"50%",
-                  background:utilColor, display:"inline-block" }}/>
+              <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                <span style={{ width: 10, height: 10, borderRadius: "50%",
+                  background: utilColor, display: "inline-block" }}/>
                 Usage ({utilUnit})
               </span>
             )}
-            <span style={{ display:"flex", alignItems:"center", gap:5 }}>
-              <span style={{ width:10, height:10, borderRadius:"50%",
-                background:C.amber, display:"inline-block" }}/>
+            <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ width: 10, height: 10, borderRadius: "50%",
+                background: C.amber, display: "inline-block" }}/>
               Bill (Rs.)
             </span>
-            <span style={{ display:"flex", alignItems:"center", gap:5 }}>
-              <span style={{ width:18, height:0, borderBottom:`2.5px dashed ${utilColor}`,
-                display:"inline-block" }}/>
+            <span style={{ display: "flex", alignItems: "center", gap: 5 }}>
+              <span style={{ width: 18, height: 0, borderBottom: `2.5px dashed ${utilColor}`,
+                display: "inline-block" }}/>
               Forecast
             </span>
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={chartData} margin={{ top:10, right:16, left:0, bottom:0 }}>
-            <defs>
-              <linearGradient id="pgU" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={utilColor} stopOpacity={0.12}/>
-                <stop offset="95%" stopColor={utilColor} stopOpacity={0.01}/>
-              </linearGradient>
-              <linearGradient id="pgA" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={C.amber} stopOpacity={0.10}/>
-                <stop offset="95%" stopColor={C.amber} stopOpacity={0.01}/>
-              </linearGradient>
-              <linearGradient id="pgF" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor={utilColor} stopOpacity={0.22}/>
-                <stop offset="95%" stopColor={utilColor} stopOpacity={0.04}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
-            <XAxis dataKey="month" tick={ax} axisLine={{ stroke:C.border }} tickLine={false}/>
-            <YAxis yAxisId="l" tick={ax} axisLine={false} tickLine={false}/>
-            <YAxis yAxisId="r" orientation="right" tick={ax} axisLine={false} tickLine={false}/>
-            <Tooltip content={<CustomTooltip />}/>
-            {!isFlat && (
-              <Area yAxisId="l" type="monotone" dataKey="units" name={`Usage (${utilUnit})`}
-                stroke={utilColor} strokeWidth={2.5} fill="url(#pgU)"
-                dot={{ r:4, fill:utilColor, strokeWidth:0 }} activeDot={{ r:6 }} connectNulls/>
-            )}
-            <Area yAxisId="r" type="monotone" dataKey="amount" name="Bill (Rs.)"
-              stroke={C.amber} strokeWidth={2.5} fill="url(#pgA)"
-              dot={{ r:4, fill:C.amber, strokeWidth:0 }} activeDot={{ r:6 }} connectNulls/>
-            {!isFlat && (
-              <Area yAxisId="l" type="monotone" dataKey="forecast" name="Forecast Usage"
-                stroke={utilColor} strokeWidth={2.5} strokeDasharray="7 4" fill="url(#pgF)"
+        {chartData.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <AreaChart data={chartData} margin={{ top: 10, right: 16, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="pgU" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={utilColor} stopOpacity={0.12}/>
+                  <stop offset="95%" stopColor={utilColor} stopOpacity={0.01}/>
+                </linearGradient>
+                <linearGradient id="pgA" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={C.amber} stopOpacity={0.10}/>
+                  <stop offset="95%" stopColor={C.amber} stopOpacity={0.01}/>
+                </linearGradient>
+                <linearGradient id="pgF" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={utilColor} stopOpacity={0.22}/>
+                  <stop offset="95%" stopColor={utilColor} stopOpacity={0.04}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="4 4" stroke="#eaecf2" vertical={false}/>
+              <XAxis dataKey="month" tick={ax} axisLine={{ stroke: C.border }} tickLine={false}/>
+              <YAxis yAxisId="l" tick={ax} axisLine={false} tickLine={false}/>
+              <YAxis yAxisId="r" orientation="right" tick={ax} axisLine={false} tickLine={false}/>
+              <Tooltip content={<CustomTooltip />}/>
+              {!isFlat && (
+                <Area yAxisId="l" type="monotone" dataKey="units" name={`Usage (${utilUnit})`}
+                  stroke={utilColor} strokeWidth={2.5} fill="url(#pgU)"
+                  dot={{ r: 4, fill: utilColor, strokeWidth: 0 }} activeDot={{ r: 6 }} connectNulls/>
+              )}
+              <Area yAxisId="r" type="monotone" dataKey="amount" name="Bill (Rs.)"
+                stroke={C.amber} strokeWidth={2.5} fill="url(#pgA)"
+                dot={{ r: 4, fill: C.amber, strokeWidth: 0 }} activeDot={{ r: 6 }} connectNulls/>
+              {!isFlat && (
+                <Area yAxisId="l" type="monotone" dataKey="forecast" name="Forecast Usage"
+                  stroke={utilColor} strokeWidth={2.5} strokeDasharray="7 4" fill="url(#pgF)"
+                  dot={(props) => {
+                    const { cx, cy, index } = props;
+                    if (index !== chartData.length - 1) return <g key={index}/>;
+                    return <circle key={index} cx={cx} cy={cy} r={7}
+                      fill={utilColor} stroke="#fff" strokeWidth={2.5}/>;
+                  }}
+                  activeDot={{ r: 6 }} connectNulls/>
+              )}
+              <Area yAxisId="r" type="monotone" dataKey="forecastAmount" name="Forecast Bill"
+                stroke={C.amber} strokeWidth={2.5} strokeDasharray="7 4" fill="url(#pgA)"
                 dot={(props) => {
                   const { cx, cy, index } = props;
-                  if (index !== chartData.length-1) return <g key={index}/>;
+                  if (index !== chartData.length - 1) return <g key={index}/>;
                   return <circle key={index} cx={cx} cy={cy} r={7}
-                    fill={utilColor} stroke="#fff" strokeWidth={2.5}/>;
+                    fill={C.amber} stroke="#fff" strokeWidth={2.5}/>;
                 }}
-                activeDot={{ r:6 }} connectNulls/>
-            )}
-            <Area yAxisId="r" type="monotone" dataKey="forecastAmount" name="Forecast Bill"
-              stroke={C.amber} strokeWidth={2.5} strokeDasharray="7 4" fill="url(#pgA)"
-              dot={(props) => {
-                const { cx, cy, index } = props;
-                if (index !== chartData.length-1) return <g key={index}/>;
-                return <circle key={index} cx={cx} cy={cy} r={7}
-                  fill={C.amber} stroke="#fff" strokeWidth={2.5}/>;
-              }}
-              activeDot={{ r:6 }} connectNulls/>
-            {chartData.length > 1 && (
-              <ReferenceLine yAxisId="l" x={chartData[chartData.length-2]?.month}
-                stroke={C.violet} strokeDasharray="5 4" strokeWidth={1.5}
-                label={{ value:"Forecast →", fill:C.violet, fontSize:11,
-                  position:"insideTopRight", fontFamily:F }}/>
-            )}
-          </AreaChart>
-        </ResponsiveContainer>
+                activeDot={{ r: 6 }} connectNulls/>
+              {chartData.length > 1 && (
+                <ReferenceLine yAxisId="l" x={chartData[chartData.length - 2]?.month}
+                  stroke={C.violet} strokeDasharray="5 4" strokeWidth={1.5}
+                  label={{ value: "Forecast →", fill: C.violet, fontSize: 11,
+                    position: "insideTopRight", fontFamily: F }}/>
+              )}
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : (
+          <div style={{ height: 300, display: "flex", alignItems: "center", justifyContent: "center", color: C.muted }}>
+            No chart data available
+          </div>
+        )}
       </div>
 
       {/* BOTTOM GRID */}
-      <div className="p-fu p-fu5" style={{ display:"grid",
-        gridTemplateColumns:"repeat(auto-fit,minmax(380px,1fr))", gap:18 }}>
+      <div className="p-fu p-fu5" style={{ display: "grid",
+        gridTemplateColumns: "repeat(auto-fit,minmax(380px,1fr))", gap: 18 }}>
 
         {/* Historical Stats */}
         {stats && (
-          <div style={{ background:C.card, border:`1px solid ${C.border}`,
-            borderRadius:18, padding:"22px 24px", boxShadow:C.s1 }}>
-            <h3 style={{ display:"flex", alignItems:"center", gap:8,
-              fontSize:"0.875rem", fontWeight:700, color:C.ink, margin:"0 0 18px" }}>
+          <div style={{ background: C.card, border: `1px solid ${C.border}`,
+            borderRadius: 18, padding: "22px 24px", boxShadow: C.s1 }}>
+            <h3 style={{ display: "flex", alignItems: "center", gap: 8,
+              fontSize: "0.875rem", fontWeight: 700, color: C.ink, margin: "0 0 18px" }}>
               <FiBarChart2 size={16} color={C.violet}/> Historical Statistics
             </h3>
-            <div style={{ display:"grid", gridTemplateColumns:`repeat(${isFlat?2:3},1fr)`,
-              gap:1, background:C.border, borderRadius:12, overflow:"hidden" }}>
+            <div style={{ display: "grid", gridTemplateColumns: `repeat(${isFlat ? 2 : 3},1fr)`,
+              gap: 1, background: C.border, borderRadius: 12, overflow: "hidden" }}>
               {(isFlat ? [
-                { label:"Highest Bill",  val:`Rs. ${stats.maxAmt.toLocaleString()}`, sub:stats.maxAmtMonth, color:C.red    },
-                { label:"Lowest Bill",   val:`Rs. ${stats.minAmt.toLocaleString()}`, sub:stats.minAmtMonth, color:C.green  },
-                { label:"Avg Monthly",   val:`Rs. ${stats.avgAmt.toLocaleString()}`, sub:`${filteredData.length} months`, color:C.amber  },
-                { label:"Total Spent",   val:`Rs. ${stats.totalSpend.toLocaleString()}`, sub:`${filteredData.length} mo. combined`, color:C.violet },
+                { label: "Highest Bill", val: `Rs. ${stats.highestBill?.amount?.toLocaleString() || 0}`, sub: stats.highestBill?.month || "N/A", color: C.red },
+                { label: "Lowest Bill", val: `Rs. ${stats.lowestBill?.amount?.toLocaleString() || 0}`, sub: stats.lowestBill?.month || "N/A", color: C.green },
+                { label: "Avg Monthly", val: `Rs. ${stats.avgMonthlyBill?.toLocaleString() || 0}`, sub: `${stats.totalBills || 0} months`, color: C.amber },
+                { label: "Total Spent", val: `Rs. ${stats.totalSpend?.toLocaleString() || 0}`, sub: `${stats.totalBills || 0} mo. combined`, color: C.violet },
               ] : [
-                { label:"Highest Bill",  val:`Rs. ${stats.maxAmt.toLocaleString()}`,  sub:stats.maxAmtMonth,  color:C.red    },
-                { label:"Lowest Bill",   val:`Rs. ${stats.minAmt.toLocaleString()}`,  sub:stats.minAmtMonth,  color:C.green  },
-                { label:"Highest Usage", val:`${stats.maxUnit} ${utilUnit}`,          sub:stats.maxUnitMonth, color:utilColor },
-                { label:"Lowest Usage",  val:`${stats.minUnit} ${utilUnit}`,          sub:stats.minUnitMonth, color:C.muted  },
-                { label:"Avg Monthly",   val:`Rs. ${stats.avgAmt.toLocaleString()}`,  sub:`${filteredData.length} months`, color:C.amber },
-                { label:"Total Spent",   val:`Rs. ${stats.totalSpend.toLocaleString()}`, sub:`${filteredData.length} mo. combined`, color:C.violet },
-              ]).map((s,i) => (
-                <div key={i} style={{ background:C.card, padding:"16px 14px" }}>
-                  <div style={{ fontSize:"0.9rem", fontWeight:800, color:s.color, marginBottom:3 }}>{s.val}</div>
-                  <div style={{ fontSize:"0.72rem", fontWeight:600, color:C.body, marginBottom:2 }}>{s.label}</div>
-                  <div style={{ fontSize:"0.68rem", color:C.faint }}>{s.sub}</div>
+                { label: "Highest Bill", val: `Rs. ${stats.highestBill?.amount?.toLocaleString() || 0}`, sub: stats.highestBill?.month || "N/A", color: C.red },
+                { label: "Lowest Bill", val: `Rs. ${stats.lowestBill?.amount?.toLocaleString() || 0}`, sub: stats.lowestBill?.month || "N/A", color: C.green },
+                { label: "Highest Usage", val: `${stats.highestUsage?.units || 0} ${utilUnit}`, sub: stats.highestUsage?.month || "N/A", color: utilColor },
+                { label: "Lowest Usage", val: `${stats.lowestUsage?.units || 0} ${utilUnit}`, sub: stats.lowestUsage?.month || "N/A", color: C.muted },
+                { label: "Avg Monthly", val: `Rs. ${stats.avgMonthlyBill?.toLocaleString() || 0}`, sub: `${stats.totalBills || 0} months`, color: C.amber },
+                { label: "Total Spent", val: `Rs. ${stats.totalSpend?.toLocaleString() || 0}`, sub: `${stats.totalBills || 0} mo. combined`, color: C.violet },
+              ]).map((s, i) => (
+                <div key={i} style={{ background: C.card, padding: "16px 14px" }}>
+                  <div style={{ fontSize: "0.9rem", fontWeight: 800, color: s.color, marginBottom: 3 }}>{s.val}</div>
+                  <div style={{ fontSize: "0.72rem", fontWeight: 600, color: C.body, marginBottom: 2 }}>{s.label}</div>
+                  <div style={{ fontSize: "0.68rem", color: C.faint }}>{s.sub}</div>
                 </div>
               ))}
             </div>
@@ -777,30 +713,30 @@ const Prediction = () => {
         )}
 
         {/* How it was calculated */}
-        <div style={{ background:C.card, border:`1px solid ${C.border}`,
-          borderRadius:18, padding:"22px 24px", boxShadow:C.s1 }}>
-          <h3 style={{ display:"flex", alignItems:"center", gap:8,
-            fontSize:"0.875rem", fontWeight:700, color:C.ink, margin:"0 0 18px" }}>
+        <div style={{ background: C.card, border: `1px solid ${C.border}`,
+          borderRadius: 18, padding: "22px 24px", boxShadow: C.s1 }}>
+          <h3 style={{ display: "flex", alignItems: "center", gap: 8,
+            fontSize: "0.875rem", fontWeight: 700, color: C.ink, margin: "0 0 18px" }}>
             <FiInfo size={16} color={C.violet}/> How This Was Calculated
           </h3>
-          <div style={{ background:C.violetL, border:`1px solid ${C.violetM}`,
-            borderRadius:12, padding:"14px 16px", marginBottom:18 }}>
-            <p style={{ margin:0, fontSize:"0.82rem", color:C.body, lineHeight:1.7 }}>
-              {prediction.explanation}
+          <div style={{ background: C.violetL, border: `1px solid ${C.violetM}`,
+            borderRadius: 12, padding: "14px 16px", marginBottom: 18 }}>
+            <p style={{ margin: 0, fontSize: "0.82rem", color: C.body, lineHeight: 1.7 }}>
+              {prediction.explanation || "Based on your historical bill data using the selected prediction method."}
             </p>
           </div>
-          <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
             {[
-              { key:"average",  label:"📊 Simple Avg" },
-              { key:"weighted", label:"⚖️ Weighted"   },
-              { key:"trend",    label:"📈 Trend"       },
+              { key: "simple", label: "📊 Simple Avg" },
+              { key: "weighted", label: "⚖️ Weighted" },
+              { key: "trend", label: "📈 Trend" },
             ].map(m => {
               const active = predictionMethod === m.key;
               return (
                 <button key={m.key} className="p-mpill"
                   onClick={() => setPredictionMethod(m.key)}
-                  style={{ padding:"6px 14px", borderRadius:20, fontFamily:F,
-                    fontSize:"0.75rem", fontWeight:600, cursor:"pointer", transition:"all .15s",
+                  style={{ padding: "6px 14px", borderRadius: 20, fontFamily: F,
+                    fontSize: "0.75rem", fontWeight: 600, cursor: "pointer", transition: "all .15s",
                     border: active ? `1px solid ${utilColor}55` : `1px solid ${C.border}`,
                     background: active ? `${utilColor}14` : C.hover,
                     color: active ? utilColor : C.muted }}>
@@ -809,32 +745,26 @@ const Prediction = () => {
               );
             })}
           </div>
-          <p style={{ fontSize:"0.8rem", color:C.muted, margin:"0 0 16px", lineHeight:1.6 }}>
-            {predictionMethod==="average"
+          <p style={{ fontSize: "0.8rem", color: C.muted, margin: "0 0 16px", lineHeight: 1.6 }}>
+            {predictionMethod === "simple"
               ? "Treats every month equally. Best for stable, consistent usage with no clear trend."
-              : predictionMethod==="weighted"
+              : predictionMethod === "weighted"
               ? "Gives more weight to recent months. Ideal when usage has been gradually changing."
               : "Extrapolates the direction of change. Best when there's a clear upward or downward trend."}
           </p>
           {stats && (
-            <div style={{ display:"flex", alignItems:"flex-start", gap:10,
-              background:C.amberL, border:`1px solid ${C.amberM}`,
-              borderRadius:12, padding:"12px 14px" }}>
-              <FiStar size={14} color={C.amber} style={{ marginTop:2, flexShrink:0 }}/>
-              <p style={{ margin:0, fontSize:"0.8rem", color:C.body, lineHeight:1.6 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 10,
+              background: C.amberL, border: `1px solid ${C.amberM}`,
+              borderRadius: 12, padding: "12px 14px" }}>
+              <FiStar size={14} color={C.amber} style={{ marginTop: 2, flexShrink: 0 }}/>
+              <p style={{ margin: 0, fontSize: "0.8rem", color: C.body, lineHeight: 1.6 }}>
                 {(() => {
-                  const trend = isFlat
-                    ? (() => {
-                        const recent = filteredData.slice(-3).reduce((s,b)=>s+b.billAmount,0)/Math.min(3,filteredData.length);
-                        const older  = filteredData.slice(0,3).reduce((s,b)=>s+b.billAmount,0)/Math.min(3,filteredData.length);
-                        return Math.round(((recent-older)/older)*100);
-                      })()
-                    : stats.overallTrend;
+                  const trend = stats.overallTrend || 0;
                   return trend < -5
-                    ? `${isFlat?"Spend":"Usage"} is trending down ${Math.abs(trend)}% — great progress!`
+                    ? `${isFlat ? "Spend" : "Usage"} is trending down ${Math.abs(trend)}% — great progress!`
                     : trend > 5
-                    ? `${isFlat?"Spend":"Usage"} is trending up ${trend}% — consider reviewing your plan options.`
-                    : `Your ${isFlat?"monthly spend":"usage"} has been fairly stable across the tracked period.`;
+                    ? `${isFlat ? "Spend" : "Usage"} is trending up ${trend}% — consider reviewing your plan options.`
+                    : `Your ${isFlat ? "monthly spend" : "usage"} has been fairly stable across the tracked period.`;
                 })()}
               </p>
             </div>
