@@ -160,7 +160,7 @@ export const tariffAPI = {
 
 
 // ─────────────────────────────────────────────
-//  PREDICTION  —  /api/prediction
+//  PREDICTION  —  /api/prediction (legacy)
 //  Used by: Prediction page
 // ─────────────────────────────────────────────
 export const predictionAPI = {
@@ -176,6 +176,51 @@ export const predictionAPI = {
   // returns: [ { targetMonth, predictedUnits, predictedAmount, confidence, createdAt } ]
   getHistory: () =>
     api.get("/prediction/history"),
+};
+
+
+// ─────────────────────────────────────────────
+//  PREDICTIONS  —  /api/predictions (NEW - ML Service)
+//  Used by: Prediction page, Budget page (Income), Dashboard
+// ─────────────────────────────────────────────
+export const predictionsAPI = {
+  // GET /api/predictions/next-month
+  // Returns prediction for next billing month
+  getNextMonth: (params) => api.get("/predictions/next-month", { params }),
+  
+  // GET /api/predictions/history
+  // Returns historical predictions with accuracy tracking
+  getHistory: (params) => api.get("/predictions/history", { params }),
+  
+  // GET /api/predictions/summary
+  // Returns summary stats for predictions
+  getSummary: () => api.get("/predictions/summary"),
+  
+  // GET /api/predictions/single?utilityType=Electricity&month=April&year=2026
+  // Get prediction for a specific utility and month
+  getPrediction: (utilityType, month, year) => 
+    api.get("/predictions/single", { params: { utilityType, month, year } }),
+  
+  // POST /api/predictions/batch
+  // Get predictions for multiple utilities at once
+  // body: { month, year, utilities: ['Electricity', 'Water'] }
+  getBatchPredictions: (data) => 
+    api.post("/predictions/batch", data),
+  
+  // GET /api/predictions/current
+  // Get predictions for current month (used by Dashboard and Budget page)
+  getCurrentMonthPredictions: () => 
+    api.get("/predictions/current"),
+  
+  // GET /api/predictions/forecast
+  // Get forecast for next month (after current)
+  getForecast: () => 
+    api.get("/predictions/forecast"),
+  
+  // GET /api/predictions/anomaly
+  // Check for anomalies in usage patterns
+  checkAnomaly: (utilityType, month, year) =>
+    api.get("/predictions/anomaly", { params: { utilityType, month, year } }),
 };
 
 
@@ -270,6 +315,8 @@ export const adminAPI = {
   getMonthlyStats: () =>
     api.get("/admin/monthly-stats"),
 };
+
+
 // ─────────────────────────────────────────────
 //  REPORTS  —  /api/reports
 //  Used by: Report page
@@ -311,20 +358,12 @@ export const reportsAPI = {
   getFilters: () =>
     api.get("/reports/filters"),
 };
+
+
 // ─────────────────────────────────────────────
-//  PREDICTIONS  —  /api/predictions
-//  Used by: Prediction page
+//  ANALYTICS  —  /api/analytics
+//  Used by: Analytics page
 // ─────────────────────────────────────────────
-export const predictionsAPI = {
-  // GET /api/predictions/next-month
-  getNextMonth: (params) => api.get("/predictions/next-month", { params }),
-  
-  // GET /api/predictions/history
-  getHistory: (params) => api.get("/predictions/history", { params }),
-  
-  // GET /api/predictions/summary
-  getSummary: () => api.get("/predictions/summary"),
-};
 export const analyticsAPI = {
   getStats: (params) => api.get("/analytics/stats", { params }),
   getMonthlyUsage: (params) => api.get("/analytics/monthly-usage", { params }),
@@ -332,65 +371,14 @@ export const analyticsAPI = {
   getDistribution: (params) => api.get("/analytics/distribution", { params }),
   getInsights: (params) => api.get("/analytics/insights", { params }),
 };
-// Add to your api.js
 
+
+// ─────────────────────────────────────────────
+//  DASHBOARD  —  /api/dashboard
+//  Used by: Dashboard page
+// ─────────────────────────────────────────────
 export const dashboardAPI = {
   getSummary: () => api.get("/dashboard/summary"),
   getTrends: () => api.get("/dashboard/trends"),
   getAlerts: () => api.get("/dashboard/alerts"),
 };
-
-// ─────────────────────────────────────────────
-//  USAGE GUIDE — how to use in your pages
-// ─────────────────────────────────────────────
-//
-//  REPLACE THIS (mock data):
-//  ─────────────────────────
-//  const [bills, setBills] = useState(MOCK_BILLS);
-//
-//  WITH THIS (real API):
-//  ─────────────────────
-//  import { billsAPI } from "../services/api";
-//
-//  const [bills, setBills] = useState([]);
-//  const [loading, setLoading] = useState(true);
-//  const [error, setError] = useState(null);
-//
-//  useEffect(() => {
-//    const fetchBills = async () => {
-//      try {
-//        const res = await billsAPI.getAll();
-//        setBills(res.data);
-//      } catch (err) {
-//        setError("Failed to load bills.");
-//      } finally {
-//        setLoading(false);
-//      }
-//    };
-//    fetchBills();
-//  }, []);
-//
-// ─────────────────────────────────────────────
-//  PAGE → API MAPPING (quick reference)
-// ─────────────────────────────────────────────
-//
-//  Dashboard       → billsAPI.getAll(), tariffAPI.getActive()
-//  AddBill         → billsAPI.create(), billsAPI.update(),
-//                    billsAPI.delete(), tariffAPI.getActive()
-//  Analytics       → billsAPI.getAll()
-//  Prediction      → predictionAPI.getNextMonth(),
-//                    predictionAPI.getHistory()
-//  Income/Budget   → billsAPI.getAll(), budgetAPI.getAll(),
-//                    budgetAPI.create(), budgetAPI.update()
-//  Report          → billsAPI.getFiltered()
-//  ProfilePage     → profileAPI.get(), profileAPI.update(),
-//                    profileAPI.changePassword()
-//  AdminDashboard  → adminAPI.getStats(),
-//                    adminAPI.getMonthlyStats(),
-//                    adminAPI.getRecentActivity(),
-//                    tariffAPI.getActive()
-//  UserManagement  → adminAPI.getAllUsers(),
-//                    adminAPI.updateUserStatus()
-//  TariffManagement→ tariffAPI.getActive(),
-//                    tariffAPI.getHistory(),
-//                    tariffAPI.create()
