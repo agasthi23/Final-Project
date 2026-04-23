@@ -43,6 +43,10 @@ app.use("/api/predictions", predictionsRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/dashboard", dashboardRoutes);
 
+import scheduler from './services/scheduler.js';
+scheduler.start();
+
+
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
