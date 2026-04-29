@@ -44,11 +44,46 @@ const fmtMonth = (m) => {
   return new Date(y, mo - 1).toLocaleString("default", { month:"long", year:"numeric" });
 };
 
+// ─── Sub-components defined OUTSIDE AddBill so React doesn't remount them ───
+
+const SectionLabel = ({ children, C }) => (
+  <p style={{ fontSize:"0.63rem", fontWeight:800, letterSpacing:"0.15em",
+    textTransform:"uppercase", color:C.faint, margin:"0 0 12px", fontFamily:F }}>
+    {children}
+  </p>
+);
+
+const Card = ({ children, style={}, className="", C }) => (
+  <div className={`ab-card-hover ${className}`}
+    style={{ background:C.card, borderRadius:16, border:`1px solid ${C.border}`,
+      boxShadow:C.s1, overflow:"hidden",
+      transition:"transform .22s ease, box-shadow .22s ease", ...style }}>
+    {children}
+  </div>
+);
+
+const InsightTile = ({ icon, label, value, accent, bg, bdr, sub, C }) => (
+  <div style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px",
+    background:bg, border:`1px solid ${bdr}`, borderRadius:12 }}>
+    <div style={{ width:38, height:38, borderRadius:9, background:C.card,
+      border:`1px solid ${bdr}`, display:"flex", alignItems:"center",
+      justifyContent:"center", color:accent, flexShrink:0 }}>{icon}</div>
+    <div style={{ flex:1, minWidth:0 }}>
+      <p style={{ fontSize:"0.68rem", fontWeight:700, color:accent, margin:0,
+        textTransform:"uppercase", letterSpacing:"0.09em" }}>{label}</p>
+      <p style={{ fontSize:"1rem", fontWeight:800, color:C.ink, margin:"2px 0 0", letterSpacing:"-0.02em" }}>{value}</p>
+      {sub && <p style={{ fontSize:"0.7rem", color:C.muted, margin:"1px 0 0" }}>{sub}</p>}
+    </div>
+  </div>
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function AddBill() {
   const { darkMode } = useTheme();
 
-  // ⭐ C is now INSIDE the component - reacts to darkMode
-  const C = {
+  // ✅ C is memoized — only rebuilds when darkMode changes
+  const C = useMemo(() => ({
     page:    darkMode ? "#0f172a" : "#f3f4f8",
     card:    darkMode ? "#1e293b" : "#ffffff",
     hover:   darkMode ? "#334155" : "#f0f2f7",
@@ -83,45 +118,14 @@ export default function AddBill() {
     s1: "0 1px 3px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04)",
     s2: "0 4px 16px rgba(15,23,42,.08),0 2px 4px rgba(15,23,42,.04)",
     s3: "0 12px 40px rgba(15,23,42,.10),0 4px 8px rgba(15,23,42,.04)",
-  };
+  }), [darkMode]);
 
-  // Utility helpers (now use C from inside)
+  // Utility helpers
   const typeColor = (t) => t === "Electricity" ? C.blue  : t === "Water" ? C.teal  : C.indigo;
   const typeBg    = (t) => t === "Electricity" ? C.blueL : t === "Water" ? C.tealL : C.indigoL;
   const typeBdr   = (t) => t === "Electricity" ? C.blueM : t === "Water" ? C.tealM : C.indigoM;
   const typeIcon  = (t) => t === "Electricity" ? <FiZap size={13}/> : t === "Water" ? <FiDroplet size={13}/> : <FiWifi size={13}/>;
   const unitLabel = (t) => t === "Electricity" ? "kWh" : t === "Water" ? "Units" : null;
-
-  const SectionLabel = ({ children }) => (
-    <p style={{ fontSize:"0.63rem", fontWeight:800, letterSpacing:"0.15em",
-      textTransform:"uppercase", color:C.faint, margin:"0 0 12px", fontFamily:F }}>
-      {children}
-    </p>
-  );
-
-  const Card = ({ children, style={}, className="" }) => (
-    <div className={`ab-card-hover ${className}`}
-      style={{ background:C.card, borderRadius:16, border:`1px solid ${C.border}`,
-        boxShadow:C.s1, overflow:"hidden",
-        transition:"transform .22s ease, box-shadow .22s ease", ...style }}>
-      {children}
-    </div>
-  );
-
-  const InsightTile = ({ icon, label, value, accent, bg, bdr, sub }) => (
-    <div style={{ display:"flex", alignItems:"center", gap:12, padding:"14px 16px",
-      background:bg, border:`1px solid ${bdr}`, borderRadius:12 }}>
-      <div style={{ width:38, height:38, borderRadius:9, background:C.card,
-        border:`1px solid ${bdr}`, display:"flex", alignItems:"center",
-        justifyContent:"center", color:accent, flexShrink:0 }}>{icon}</div>
-      <div style={{ flex:1, minWidth:0 }}>
-        <p style={{ fontSize:"0.68rem", fontWeight:700, color:accent, margin:0,
-          textTransform:"uppercase", letterSpacing:"0.09em" }}>{label}</p>
-        <p style={{ fontSize:"1rem", fontWeight:800, color:C.ink, margin:"2px 0 0", letterSpacing:"-0.02em" }}>{value}</p>
-        {sub && <p style={{ fontSize:"0.7rem", color:C.muted, margin:"1px 0 0" }}>{sub}</p>}
-      </div>
-    </div>
-  );
 
   const [utilityType,  setUtilityType]  = useState("Electricity");
   const [selMonth,     setSelMonth]     = useState("");
@@ -177,16 +181,16 @@ export default function AddBill() {
 
   const insights = useMemo(() => {
     if (!bills.length) return null;
-    const elecBills    = bills.filter(b => b.utilityType === "Electricity");
-    const waterBills   = bills.filter(b => b.utilityType === "Water");
-    const internetBills= bills.filter(b => b.utilityType === "Internet");
-    const totalSpent   = bills.reduce((s, b) => s + Number(b.billAmount), 0);
-    const highestBill  = [...bills].sort((a,b) => Number(b.billAmount) - Number(a.billAmount))[0];
-    const avgElec      = elecBills.length
+    const elecBills     = bills.filter(b => b.utilityType === "Electricity");
+    const waterBills    = bills.filter(b => b.utilityType === "Water");
+    const internetBills = bills.filter(b => b.utilityType === "Internet");
+    const totalSpent    = bills.reduce((s, b) => s + Number(b.billAmount), 0);
+    const highestBill   = [...bills].sort((a,b) => Number(b.billAmount) - Number(a.billAmount))[0];
+    const avgElec       = elecBills.length
       ? (elecBills.reduce((s,b)=>s+Number(b.billAmount),0)/elecBills.length).toFixed(0) : null;
-    const avgWater     = waterBills.length
+    const avgWater      = waterBills.length
       ? (waterBills.reduce((s,b)=>s+Number(b.billAmount),0)/waterBills.length).toFixed(0) : null;
-    const avgInternet  = internetBills.length
+    const avgInternet   = internetBills.length
       ? (internetBills.reduce((s,b)=>s+Number(b.billAmount),0)/internetBills.length).toFixed(0) : null;
     const byMonth = {};
     bills.forEach(b => {
@@ -263,8 +267,28 @@ export default function AddBill() {
   };
   const cancelEdit = () => setEditId(null);
 
+  // Shared input style helpers (stable references via useMemo)
+  const inputBase = useMemo(() => ({
+    width:"100%", padding:"11px 14px", borderRadius:10,
+    border:`1.5px solid ${C.border}`, background:C.hover,
+    color:C.ink, fontFamily:F, fontSize:"0.875rem",
+    outline:"none", boxSizing:"border-box", transition:"border-color .15s, background .15s",
+  }), [C]);
+
+  const selectBase = useMemo(() => ({
+    width:"100%", padding:"11px 36px 11px 14px", borderRadius:10,
+    border:`1.5px solid ${C.border}`, background:C.hover,
+    fontFamily:F, fontSize:"0.875rem", fontWeight:500,
+    outline:"none", appearance:"none", cursor:"pointer",
+    boxSizing:"border-box", transition:"border-color .15s, background .15s",
+  }), [C]);
+
+  const onFocus = (e) => { e.target.style.borderColor = C.blue; e.target.style.background = C.card; };
+  const onBlur  = (e) => { e.target.style.borderColor = C.border; e.target.style.background = C.hover; };
+
   return (
-    <div style={{ minHeight:"100vh", background:C.page, fontFamily:F, color:C.ink, padding:"28px 32px 64px", transition:"background 0.3s ease, color 0.3s ease" }}>
+    <div style={{ minHeight:"100vh", background:C.page, fontFamily:F, color:C.ink,
+      padding:"28px 32px 64px", transition:"background 0.3s ease, color 0.3s ease" }}>
 
       {/* HEADER */}
       <div className="ab-fu" style={{ marginBottom:28 }}>
@@ -278,7 +302,7 @@ export default function AddBill() {
       <div style={{ display:"grid", gridTemplateColumns:"1.8fr 1fr", gap:24, marginBottom:28, alignItems:"start" }}>
 
         {/* ADD BILL FORM */}
-        <Card className="ab-fu" style={{ animationDelay:".06s" }}>
+        <Card C={C} className="ab-fu" style={{ animationDelay:".06s" }}>
           <div style={{ padding:"22px 24px 18px", borderBottom:`1px solid ${C.border}`, marginBottom:20 }}>
             <h2 style={{ fontSize:"1rem", fontWeight:700, color:C.ink, margin:0 }}>Add New Bill</h2>
             <p style={{ fontSize:"0.72rem", color:C.muted, margin:"3px 0 0" }}>
@@ -305,6 +329,7 @@ export default function AddBill() {
             )}
 
             <form onSubmit={handleSubmit}>
+              {/* Utility Type */}
               <div style={{ marginBottom:20 }}>
                 <p style={{ fontSize:"0.72rem", fontWeight:700, color:C.muted,
                   textTransform:"uppercase", letterSpacing:"0.08em", margin:"0 0 8px" }}>Utility Type</p>
@@ -331,6 +356,7 @@ export default function AddBill() {
                 </div>
               </div>
 
+              {/* Billing Month & Year */}
               <div style={{ marginBottom:16 }}>
                 <label style={{ display:"block", fontSize:"0.78rem", fontWeight:600,
                   color:C.body, marginBottom:6 }}>Billing Month &amp; Year</label>
@@ -338,13 +364,8 @@ export default function AddBill() {
                   <div style={{ position:"relative" }}>
                     <select value={selMonth} required
                       onChange={e => { setSelMonth(e.target.value); setDupWarning(""); }}
-                      style={{ width:"100%", padding:"11px 36px 11px 14px", borderRadius:10,
-                        border:`1.5px solid ${C.border}`, background:C.hover,
-                        color: selMonth ? C.ink : C.faint, fontFamily:F,
-                        fontSize:"0.875rem", fontWeight:500, outline:"none",
-                        appearance:"none", cursor:"pointer", boxSizing:"border-box" }}
-                      onFocus={e => { e.target.style.borderColor=C.blue; e.target.style.background="#fff"; e.target.style.boxShadow=`0 0 0 3px ${C.blueM}55`; }}
-                      onBlur={e  => { e.target.style.borderColor=C.border; e.target.style.background=C.hover; e.target.style.boxShadow="none"; }}>
+                      style={{ ...selectBase, color: selMonth ? C.ink : C.faint }}
+                      onFocus={onFocus} onBlur={onBlur}>
                       <option value="" disabled>Select month</option>
                       {["January","February","March","April","May","June",
                         "July","August","September","October","November","December"
@@ -358,13 +379,8 @@ export default function AddBill() {
                   <div style={{ position:"relative" }}>
                     <select value={selYear} required
                       onChange={e => { setSelYear(e.target.value); setDupWarning(""); }}
-                      style={{ width:"100%", padding:"11px 36px 11px 14px", borderRadius:10,
-                        border:`1.5px solid ${C.border}`, background:C.hover,
-                        color: selYear ? C.ink : C.faint, fontFamily:F,
-                        fontSize:"0.875rem", fontWeight:500, outline:"none",
-                        appearance:"none", cursor:"pointer", boxSizing:"border-box" }}
-                      onFocus={e => { e.target.style.borderColor=C.blue; e.target.style.background="#fff"; e.target.style.boxShadow=`0 0 0 3px ${C.blueM}55`; }}
-                      onBlur={e  => { e.target.style.borderColor=C.border; e.target.style.background=C.hover; e.target.style.boxShadow="none"; }}>
+                      style={{ ...selectBase, color: selYear ? C.ink : C.faint }}
+                      onFocus={onFocus} onBlur={onBlur}>
                       <option value="" disabled>Year</option>
                       {[2022,2023,2024,2025,2026].map(y => (
                         <option key={y} value={y}>{y}</option>
@@ -376,6 +392,7 @@ export default function AddBill() {
                 </div>
               </div>
 
+              {/* Units Used */}
               {!isInternet && (
                 <div style={{ marginBottom:16 }}>
                   <label style={{ display:"block", fontSize:"0.78rem", fontWeight:600,
@@ -383,29 +400,23 @@ export default function AddBill() {
                   <input type="number" min="0" step="0.01" value={unitsUsed} required
                     placeholder={`Enter ${unitLabel(utilityType)}`}
                     onChange={e => setUnitsUsed(e.target.value)}
-                    style={{ width:"100%", padding:"11px 14px", borderRadius:10,
-                      border:`1.5px solid ${C.border}`, background:C.hover,
-                      color:C.ink, fontFamily:F, fontSize:"0.875rem",
-                      outline:"none", boxSizing:"border-box" }}
-                    onFocus={e => { e.target.style.borderColor=C.blue; e.target.style.background="#fff"; e.target.style.boxShadow=`0 0 0 3px ${C.blueM}55`; }}
-                    onBlur={e  => { e.target.style.borderColor=C.border; e.target.style.background=C.hover; e.target.style.boxShadow="none"; }}/>
+                    style={inputBase}
+                    onFocus={onFocus} onBlur={onBlur}/>
                 </div>
               )}
 
+              {/* Bill Amount */}
               <div style={{ marginBottom:16 }}>
                 <label style={{ display:"block", fontSize:"0.78rem", fontWeight:600,
                   color:C.body, marginBottom:6 }}>Bill Amount (Rs.)</label>
                 <input type="number" min="0" step="0.01" value={billAmount} required
                   placeholder="Enter amount in Rs."
                   onChange={e => setBillAmount(e.target.value)}
-                  style={{ width:"100%", padding:"11px 14px", borderRadius:10,
-                    border:`1.5px solid ${C.border}`, background:C.hover,
-                    color:C.ink, fontFamily:F, fontSize:"0.875rem",
-                    outline:"none", boxSizing:"border-box" }}
-                  onFocus={e => { e.target.style.borderColor=C.blue; e.target.style.background="#fff"; e.target.style.boxShadow=`0 0 0 3px ${C.blueM}55`; }}
-                  onBlur={e  => { e.target.style.borderColor=C.border; e.target.style.background=C.hover; e.target.style.boxShadow="none"; }}/>
+                  style={inputBase}
+                  onFocus={onFocus} onBlur={onBlur}/>
               </div>
 
+              {/* Internet flat-rate preview */}
               {isInternet && billAmount && (
                 <div className="ab-pop" style={{ display:"flex", alignItems:"center",
                   justifyContent:"space-between", padding:"10px 14px",
@@ -416,6 +427,7 @@ export default function AddBill() {
                 </div>
               )}
 
+              {/* Cost per unit preview */}
               {costPerUnit && (
                 <div className="ab-pop" style={{ display:"flex", alignItems:"center",
                   justifyContent:"space-between", padding:"10px 14px",
@@ -442,27 +454,27 @@ export default function AddBill() {
 
         {/* INSIGHTS */}
         <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-          <Card className="ab-fu" style={{ animationDelay:".10s", padding:"18px 20px" }}>
-            <SectionLabel>Quick Insights</SectionLabel>
+          <Card C={C} className="ab-fu" style={{ animationDelay:".10s", padding:"18px 20px" }}>
+            <SectionLabel C={C}>Quick Insights</SectionLabel>
             <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              <InsightTile icon={<FiDollarSign size={17}/>} label="Total Spent"
+              <InsightTile C={C} icon={<FiDollarSign size={17}/>} label="Total Spent"
                 value={insights ? `Rs. ${fmt(insights.totalSpent)}` : "Rs. 0"}
                 accent={C.violet} bg={C.violetL} bdr={C.violetM}
                 sub={`Across ${bills.length} bill${bills.length !== 1?"s":""}`}/>
-              <InsightTile icon={<FiZap size={17}/>} label="Avg. Electricity Bill"
+              <InsightTile C={C} icon={<FiZap size={17}/>} label="Avg. Electricity Bill"
                 value={insights?.avgElec ? `Rs. ${fmt(insights.avgElec)}` : "—"}
                 accent={C.blue} bg={C.blueL} bdr={C.blueM}
                 sub={insights?.elecCount ? `${insights.elecCount} bill${insights.elecCount!==1?"s":""}` : "No data"}/>
-              <InsightTile icon={<FiDroplet size={17}/>} label="Avg. Water Bill"
+              <InsightTile C={C} icon={<FiDroplet size={17}/>} label="Avg. Water Bill"
                 value={insights?.avgWater ? `Rs. ${fmt(insights.avgWater)}` : "—"}
                 accent={C.teal} bg={C.tealL} bdr={C.tealM}
                 sub={insights?.waterCount ? `${insights.waterCount} bill${insights.waterCount!==1?"s":""}` : "No data"}/>
-              <InsightTile icon={<FiWifi size={17}/>} label="Avg. Internet Bill"
+              <InsightTile C={C} icon={<FiWifi size={17}/>} label="Avg. Internet Bill"
                 value={insights?.avgInternet ? `Rs. ${fmt(insights.avgInternet)}` : "—"}
                 accent={C.indigo} bg={C.indigoL} bdr={C.indigoM}
                 sub={insights?.internetCount ? `${insights.internetCount} bill${insights.internetCount!==1?"s":""}` : "No data"}/>
               {insights?.highestBill && (
-                <InsightTile icon={<FiTrendingUp size={17}/>} label="Highest Bill"
+                <InsightTile C={C} icon={<FiTrendingUp size={17}/>} label="Highest Bill"
                   value={`Rs. ${fmt(insights.highestBill.billAmount)}`}
                   accent={C.amber} bg={C.amberL} bdr={C.amberM}
                   sub={`${insights.highestBill.utilityType} · ${fmtMonth(insights.highestBill.billingMonth)}`}/>
@@ -471,8 +483,8 @@ export default function AddBill() {
           </Card>
 
           {insights && Object.keys(insights.byMonth).length > 0 && (
-            <Card className="ab-fu" style={{ animationDelay:".14s", padding:"18px 20px" }}>
-              <SectionLabel>Monthly Combined Totals</SectionLabel>
+            <Card C={C} className="ab-fu" style={{ animationDelay:".14s", padding:"18px 20px" }}>
+              <SectionLabel C={C}>Monthly Combined Totals</SectionLabel>
               <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
                 {Object.entries(insights.byMonth)
                   .sort((a,b) => b[0].localeCompare(a[0]))
@@ -491,7 +503,7 @@ export default function AddBill() {
       </div>
 
       {/* BILLING HISTORY */}
-      <Card className="ab-fu" style={{ animationDelay:".18s" }}>
+      <Card C={C} className="ab-fu" style={{ animationDelay:".18s" }}>
         <div style={{ padding:"20px 24px 16px", borderBottom:`1px solid ${C.border}`,
           display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
           <div>
@@ -569,8 +581,8 @@ export default function AddBill() {
               </thead>
               <tbody>
                 {filteredBills.map((bill, idx) => {
-                  const isEditing   = editId === bill._id;
-                  const isBillNet   = bill.utilityType === "Internet";
+                  const isEditing = editId === bill._id;
+                  const isBillNet = bill.utilityType === "Internet";
                   const cpu = !isBillNet && Number(bill.unitsUsed) > 0
                     ? (Number(bill.billAmount)/Number(bill.unitsUsed)).toFixed(2) : "—";
                   const editCpu = !isBillNet && editUnits && editAmount && Number(editUnits)>0
@@ -606,7 +618,7 @@ export default function AddBill() {
                             style={{ width:90, padding:"6px 10px", borderRadius:8,
                               border:`1.5px solid ${typeColor(bill.utilityType)}`, fontFamily:F,
                               fontSize:"0.85rem", textAlign:"right",
-                              background:"#fff", color:C.ink, outline:"none" }}/>
+                              background:C.card, color:C.ink, outline:"none" }}/>
                         ) : (
                           <span style={{ fontSize:"0.85rem", color:C.body }}>
                             {fmt(bill.unitsUsed)} {bill.utilityType==="Electricity"?"kWh":"Units"}
@@ -621,7 +633,7 @@ export default function AddBill() {
                             style={{ width:110, padding:"6px 10px", borderRadius:8,
                               border:`1.5px solid ${typeColor(bill.utilityType)}`, fontFamily:F,
                               fontSize:"0.85rem", textAlign:"right",
-                              background:"#fff", color:C.ink, outline:"none" }}/>
+                              background:C.card, color:C.ink, outline:"none" }}/>
                         ) : (
                           <span style={{ fontSize:"0.875rem", fontWeight:700, color:C.ink }}>
                             Rs. {fmt(bill.billAmount)}
