@@ -6,7 +6,7 @@ import {
 } from "recharts";
 import {
   FiZap, FiDroplet, FiWifi, FiCalendar, FiArrowUp, FiArrowDown,
-  FiBarChart2, FiStar, FiTrendingUp, FiInfo, FiShield,
+  FiBarChart2, FiStar, FiTrendingUp, FiInfo, FiShield, FiHome,
 } from "react-icons/fi";
 import { useTheme } from "../context/ThemeContext";
 import { predictionsAPI } from "../services/api";
@@ -93,6 +93,37 @@ const Prediction = () => {
   const [historyData, setHistoryData] = useState(null);
   const [chartData, setChartData] = useState([]);
 
+  // Household Features State
+  const [showHouseholdForm, setShowHouseholdForm] = useState(false);
+  const [savingHousehold, setSavingHousehold] = useState(false);
+  const [activeTab, setActiveTab] = useState("electricity");
+  const [householdData, setHouseholdData] = useState({
+    electricity: {
+      num_ac: 0,
+      ac_type: "non_inverter",
+      num_refrigerators: 1,
+      fridge_age_years: 5,
+      num_tvs: 1,
+      num_computers: 0,
+      has_electric_water_heater: false,
+      has_washing_machine: false,
+      has_solar: false,
+      has_electric_vehicle: false,
+      num_floors: 1,
+      house_area_sqft: 1000
+    },
+    water: {
+      num_bathrooms: 1,
+      num_people: 1,
+      has_water_heater: false,
+      has_washing_machine: false,
+      has_garden: false,
+      has_pool: false,
+      has_water_tank: false,
+      building_type: "house"
+    }
+  });
+
   const meta = UTIL_META[selectedUtility];
   const utilColor = meta?.color || C.blue;
   const utilUnit = meta?.unit || "";
@@ -175,6 +206,82 @@ for (let i = 0; i < maxLength; i++) {
   useEffect(() => {
     fetchPredictionData();
   }, [fetchPredictionData]);
+
+  // Save household features to database
+  const saveHouseholdFeatures = async () => {
+    setSavingHousehold(true);
+    try {
+      const token = localStorage.getItem("authToken");
+      const response = await fetch("http://localhost:5000/api/users/household-features", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(householdData)
+      });
+      
+      if (response.ok) {
+        alert("✅ Household details saved! Your predictions will now be more accurate.");
+        setShowHouseholdForm(false);
+        // Refresh prediction to use new data
+        fetchPredictionData();
+      } else {
+        alert("❌ Failed to save. Please try again.");
+      }
+    } catch (error) {
+      console.error("Error saving household features:", error);
+      alert("❌ Error saving. Please check your connection.");
+    } finally {
+      setSavingHousehold(false);
+    }
+  };
+
+  // Load existing household features on page load
+  useEffect(() => {
+    const loadHouseholdFeatures = async () => {
+      try {
+        const token = localStorage.getItem("authToken");
+        const response = await fetch("http://localhost:5000/api/users/household-features", {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          if (data && (data.electricity || data.water)) {
+            setHouseholdData({
+              electricity: {
+                num_ac: data.electricity?.num_ac || 0,
+                ac_type: data.electricity?.ac_type || "non_inverter",
+                num_refrigerators: data.electricity?.num_refrigerators || 1,
+                fridge_age_years: data.electricity?.fridge_age_years || 5,
+                num_tvs: data.electricity?.num_tvs || 1,
+                num_computers: data.electricity?.num_computers || 0,
+                has_electric_water_heater: data.electricity?.has_electric_water_heater || false,
+                has_washing_machine: data.electricity?.has_washing_machine || false,
+                has_solar: data.electricity?.has_solar || false,
+                has_electric_vehicle: data.electricity?.has_electric_vehicle || false,
+                num_floors: data.electricity?.num_floors || 1,
+                house_area_sqft: data.electricity?.house_area_sqft || 1000
+              },
+              water: {
+                num_bathrooms: data.water?.num_bathrooms || 1,
+                num_people: data.water?.num_people || 1,
+                has_water_heater: data.water?.has_water_heater || false,
+                has_washing_machine: data.water?.has_washing_machine || false,
+                has_garden: data.water?.has_garden || false,
+                has_pool: data.water?.has_pool || false,
+                has_water_tank: data.water?.has_water_tank || false,
+                building_type: data.water?.building_type || "house"
+              }
+            });
+          }
+        }
+      } catch (error) {
+        console.error("Error loading household features:", error);
+      }
+    };
+    loadHouseholdFeatures();
+  }, []);
 
   // Get prediction values from state
   const prediction = useMemo(() => {
@@ -352,6 +459,174 @@ for (let i = 0; i < maxLength; i++) {
             </svg>
           </div>
         </div>
+      </div>
+
+      {/* ===== HOUSEHOLD FEATURES SECTION ===== */}
+      <div className="p-fu p-fu2" style={{ 
+        background: C.card, 
+        border: `1px solid ${C.border}`, 
+        borderRadius: 16, 
+        padding: "16px 20px", 
+        marginBottom: 22,
+        boxShadow: C.s1 
+      }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 10, background: C.indigoL, display: "flex", alignItems: "center", justifyContent: "center", color: C.indigo }}>
+              <FiHome size={18} />
+            </div>
+            <div>
+              <h4 style={{ fontSize: "0.85rem", fontWeight: 700, color: C.ink, margin: 0 }}>Household Details</h4>
+              <p style={{ fontSize: "0.7rem", color: C.muted, margin: 0 }}>Help us improve predictions with your home info</p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowHouseholdForm(!showHouseholdForm)}
+            style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 20, border: `1px solid ${C.border}`, background: C.hover, color: C.ink, fontSize: "0.75rem", fontWeight: 500, cursor: "pointer" }}
+          >
+            {showHouseholdForm ? "− Hide" : "+ Add Details"}
+          </button>
+        </div>
+
+        {showHouseholdForm && (
+          <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+            
+            {/* Tab Navigation */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 20, borderBottom: `1px solid ${C.border}`, paddingBottom: 8 }}>
+              <button
+                onClick={() => setActiveTab("electricity")}
+                style={{ padding: "6px 16px", borderRadius: 20, fontSize: "0.75rem", fontWeight: 600, cursor: "pointer", border: "none", background: activeTab === "electricity" ? C.blue : "transparent", color: activeTab === "electricity" ? "#fff" : C.muted }}
+              >
+                ⚡ Electricity
+              </button>
+              <button
+                onClick={() => setActiveTab("water")}
+                style={{ padding: "6px 16px", borderRadius: 20, fontSize: "0.75rem", fontWeight: 600, cursor: "pointer", border: "none", background: activeTab === "water" ? C.teal : "transparent", color: activeTab === "water" ? "#fff" : C.muted }}
+              >
+                💧 Water
+              </button>
+              <button
+                onClick={() => setActiveTab("general")}
+                style={{ padding: "6px 16px", borderRadius: 20, fontSize: "0.75rem", fontWeight: 600, cursor: "pointer", border: "none", background: activeTab === "general" ? C.amber : "transparent", color: activeTab === "general" ? "#fff" : C.muted }}
+              >
+                🏠 General
+              </button>
+            </div>
+
+            {/* Electricity Tab */}
+            {activeTab === "electricity" && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
+                <div>
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: 4 }}>Number of ACs</label>
+                  <input type="number" min="0" value={householdData.electricity.num_ac} onChange={(e) => setHouseholdData({ ...householdData, electricity: { ...householdData.electricity, num_ac: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.ink }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: 4 }}>AC Type</label>
+                  <select value={householdData.electricity.ac_type} onChange={(e) => setHouseholdData({ ...householdData, electricity: { ...householdData.electricity, ac_type: e.target.value } })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.ink }}>
+                    <option value="inverter">Inverter (Energy Saving)</option>
+                    <option value="non_inverter">Non-Inverter (Regular)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: 4 }}>Number of Refrigerators</label>
+                  <input type="number" min="0" value={householdData.electricity.num_refrigerators} onChange={(e) => setHouseholdData({ ...householdData, electricity: { ...householdData.electricity, num_refrigerators: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.ink }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: 4 }}>Fridge Age (years)</label>
+                  <input type="number" min="0" value={householdData.electricity.fridge_age_years} onChange={(e) => setHouseholdData({ ...householdData, electricity: { ...householdData.electricity, fridge_age_years: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.ink }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: 4 }}>Number of TVs</label>
+                  <input type="number" min="0" value={householdData.electricity.num_tvs} onChange={(e) => setHouseholdData({ ...householdData, electricity: { ...householdData.electricity, num_tvs: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.ink }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: 4 }}>Has Solar Panels?</label>
+                  <select value={householdData.electricity.has_solar} onChange={(e) => setHouseholdData({ ...householdData, electricity: { ...householdData.electricity, has_solar: e.target.value === "true" } })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.ink }}>
+                    <option value="false">No</option>
+                    <option value="true">Yes</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: 4 }}>Has Electric Vehicle?</label>
+                  <select value={householdData.electricity.has_electric_vehicle} onChange={(e) => setHouseholdData({ ...householdData, electricity: { ...householdData.electricity, has_electric_vehicle: e.target.value === "true" } })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.ink }}>
+                    <option value="false">No</option>
+                    <option value="true">Yes</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* Water Tab */}
+            {activeTab === "water" && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
+                <div>
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: 4 }}>Number of Bathrooms</label>
+                  <input type="number" min="1" value={householdData.water.num_bathrooms} onChange={(e) => setHouseholdData({ ...householdData, water: { ...householdData.water, num_bathrooms: parseInt(e.target.value) || 1 } })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.ink }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: 4 }}>Number of People</label>
+                  <input type="number" min="1" value={householdData.water.num_people} onChange={(e) => setHouseholdData({ ...householdData, water: { ...householdData.water, num_people: parseInt(e.target.value) || 1 } })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.ink }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: 4 }}>Has Water Heater?</label>
+                  <select value={householdData.water.has_water_heater} onChange={(e) => setHouseholdData({ ...householdData, water: { ...householdData.water, has_water_heater: e.target.value === "true" } })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.ink }}>
+                    <option value="false">No</option>
+                    <option value="true">Yes</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: 4 }}>Has Garden?</label>
+                  <select value={householdData.water.has_garden} onChange={(e) => setHouseholdData({ ...householdData, water: { ...householdData.water, has_garden: e.target.value === "true" } })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.ink }}>
+                    <option value="false">No</option>
+                    <option value="true">Yes</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: 4 }}>Has Swimming Pool?</label>
+                  <select value={householdData.water.has_pool} onChange={(e) => setHouseholdData({ ...householdData, water: { ...householdData.water, has_pool: e.target.value === "true" } })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.ink }}>
+                    <option value="false">No</option>
+                    <option value="true">Yes</option>
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* General Tab */}
+            {activeTab === "general" && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
+                <div>
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: 4 }}>Building Type</label>
+                  <select value={householdData.water.building_type} onChange={(e) => setHouseholdData({ ...householdData, water: { ...householdData.water, building_type: e.target.value } })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.ink }}>
+                    <option value="house">House</option>
+                    <option value="apartment">Apartment</option>
+                    <option value="restaurant">Restaurant</option>
+                    <option value="hotel">Hotel</option>
+                    <option value="office">Office</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: 4 }}>Number of Floors</label>
+                  <input type="number" min="1" value={householdData.electricity.num_floors} onChange={(e) => setHouseholdData({ ...householdData, electricity: { ...householdData.electricity, num_floors: parseInt(e.target.value) || 1 } })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.ink }} />
+                </div>
+                <div>
+                  <label style={{ fontSize: "0.7rem", fontWeight: 600, color: C.muted, display: "block", marginBottom: 4 }}>House Area (sq ft)</label>
+                  <input type="number" min="0" value={householdData.electricity.house_area_sqft} onChange={(e) => setHouseholdData({ ...householdData, electricity: { ...householdData.electricity, house_area_sqft: parseInt(e.target.value) || 0 } })} style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: C.card, color: C.ink }} />
+                </div>
+              </div>
+            )}
+
+            {/* Save Button */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 20, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+              <button
+                onClick={saveHouseholdFeatures}
+                disabled={savingHousehold}
+                style={{ padding: "10px 28px", borderRadius: 10, background: C.green, color: "#fff", border: "none", fontSize: "0.85rem", fontWeight: 600, cursor: "pointer" }}
+              >
+                {savingHousehold ? "Saving..." : "💾 Save Household Details"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* HERO */}
