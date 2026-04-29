@@ -1,5 +1,6 @@
 // server/controllers/billController.js
 import Bill from "../models/Bill.js";
+import { checkAndAlertAnomaly } from "./predictionsController.js";  // ✅ ADD THIS IMPORT
 
 // GET all bills for logged-in user
 export const getBills = async (req, res) => {
@@ -16,6 +17,15 @@ export const createBill = async (req, res) => {
   const { utilityType, billingMonth, unitsUsed, billAmount } = req.body;
 
   try {
+    // Validate utility type
+    const validUtilities = ["Electricity", "Water", "Internet"];
+    if (!validUtilities.includes(utilityType)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid utility type. Must be Electricity, Water, or Internet",
+      });
+    }
+
     // Check for duplicate
     const existing = await Bill.findOne({
       user: req.user.id,
@@ -38,6 +48,13 @@ export const createBill = async (req, res) => {
       billAmount,
     });
 
+    // ✅ ✅ ✅ ADD ANOMALY CHECK HERE ✅ ✅ ✅
+    // After successfully creating the bill, check for unusual usage
+    // Don't await - let it run in background (fire and forget)
+    checkAndAlertAnomaly(req.user.id, utilityType).catch(err => 
+      console.error("Anomaly check failed:", err)
+    );
+
     res.status(201).json({ success: true, bill });
   } catch (error) {
     res.status(500).json({ success: false, message: "Server error" });
@@ -58,6 +75,12 @@ export const updateBill = async (req, res) => {
     bill.unitsUsed  = unitsUsed  ?? bill.unitsUsed;
     bill.billAmount = billAmount ?? bill.billAmount;
     await bill.save();
+
+    // ✅ OPTIONAL: Also check anomaly when bill is updated
+    // (if amount increased significantly)
+    checkAndAlertAnomaly(req.user.id, bill.utilityType).catch(err => 
+      console.error("Anomaly check failed on update:", err)
+    );
 
     res.json({ success: true, bill });
   } catch (error) {

@@ -12,6 +12,8 @@ export const getAdminStats = async (req, res) => {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const last30Days = new Date();
+    last30Days.setDate(last30Days.getDate() - 30);
 
     // User stats
     const totalUsers   = await User.countDocuments({ role: "user" });
@@ -19,7 +21,6 @@ export const getAdminStats = async (req, res) => {
       role: "user",
       createdAt: { $gte: startOfMonth },
     });
-    // ✅ FIXED: count users who are explicitly active OR have no status field
     const activeUsers  = await User.countDocuments({
       role: "user",
       $or: [{ status: "active" }, { status: { $exists: false } }],
@@ -56,6 +57,100 @@ export const getAdminStats = async (req, res) => {
       ? parseFloat(((totalSpend - lastMonthSpend) / lastMonthSpend * 100).toFixed(1))
       : 0;
 
+    // ============================================
+    // SYSTEM ALERTS - COUNT ALL ALERT TYPES
+    // ============================================
+    let alertCount = 0;
+    const alertDetails = {
+      anomaly: 0,
+      missingData: 0,
+      budget: 0,
+      email: 0,
+      reminder: 0
+    };
+
+    // 1. ANOMALY ALERTS (usage spike >20% in last 30 days)
+    const allBills = await Bill.find({ createdAt: { $gte: last30Days } });
+    const billsByUser = {};
+    for (const bill of allBills) {
+      const key = `${bill.user}_${bill.utilityType}`;
+      if (!billsByUser[key]) billsByUser[key] = [];
+      billsByUser[key].push(bill);
+    }
+    
+    for (const [key, userBills] of Object.entries(billsByUser)) {
+      if (userBills.length >= 4) {
+        userBills.sort((a, b) => new Date(b.billingMonth) - new Date(a.billingMonth));
+        const current = userBills[0].billAmount;
+        const prevThree = userBills.slice(1, 4);
+        const avgPrev = prevThree.reduce((s, b) => s + b.billAmount, 0) / prevThree.length;
+        const percentIncrease = ((current - avgPrev) / avgPrev) * 100;
+        
+        if (percentIncrease > 20) {
+          alertCount++;
+          alertDetails.anomaly++;
+        }
+      }
+    }
+
+    // 2. MISSING DATA ALERTS (users with <3 months of bills but >0)
+    const allUsers = await User.find({ role: "user" });
+    for (const user of allUsers) {
+      const userBillCount = await Bill.countDocuments({ user: user._id });
+      if (userBillCount > 0 && userBillCount < 3) {
+        alertCount++;
+        alertDetails.missingData++;
+      }
+    }
+
+    // 3. BUDGET EXCEEDED ALERTS (predicted >8% of salary)
+    for (const user of allUsers) {
+      if (user.salary && user.salary > 0) {
+        const userBills = await Bill.find({ user: user._id }).sort({ billingMonth: -1 }).limit(6);
+        if (userBills.length >= 3) {
+          const recentBills = userBills.slice(0, 3);
+          const avgBill = recentBills.reduce((s, b) => s + b.billAmount, 0) / recentBills.length;
+          const percentOfSalary = (avgBill / user.salary) * 100;
+          
+          if (percentOfSalary > 8) {
+            alertCount++;
+            alertDetails.budget++;
+          }
+        }
+      }
+    }
+
+    // 4. EMAIL NOTIFICATION ALERTS (users receiving prediction emails)
+    const usersWithEmailEnabled = await User.countDocuments({
+      'preferences.emailNotifications': true
+    });
+    
+    if (usersWithEmailEnabled > 0) {
+      alertCount += usersWithEmailEnabled;
+      alertDetails.email = usersWithEmailEnabled;
+    }
+
+    // 5. MONTH-END REMINDERS (users who haven't added current month bill)
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const usersWhoAddedThisMonth = await Bill.distinct("user", { 
+      createdAt: { $gte: currentMonthStart } 
+    });
+    const usersWithoutCurrentMonth = allUsers.filter(
+      user => !usersWhoAddedThisMonth.includes(user._id.toString())
+    ).length;
+    
+    if (usersWithoutCurrentMonth > 0) {
+      alertCount += usersWithoutCurrentMonth;
+      alertDetails.reminder = usersWithoutCurrentMonth;
+    }
+
+    console.log(`📊 System Alerts: ${alertCount} total`);
+    console.log(`   - Anomaly: ${alertDetails.anomaly}`);
+    console.log(`   - Missing Data: ${alertDetails.missingData}`);
+    console.log(`   - Budget Exceeded: ${alertDetails.budget}`);
+    console.log(`   - Email Notifications: ${alertDetails.email}`);
+    console.log(`   - Month-end Reminders: ${alertDetails.reminder}`);
+
     res.json({
       success: true,
       stats: {
@@ -68,7 +163,7 @@ export const getAdminStats = async (req, res) => {
         waterAvg:       Math.round(waterAvgResult[0]?.avg || 0),
         totalSpend:     Math.round(totalSpend),
         spendChange,
-        systemAlerts:   0,
+        systemAlerts:   alertCount,  // ✅ NOW COUNTS ALL ALERT TYPES!
       },
     });
   } catch (error) {
@@ -113,6 +208,7 @@ export const getMonthlyStats = async (req, res) => {
 
     res.json({ success: true, monthlyStats: months });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
@@ -154,6 +250,7 @@ export const getAllUsers = async (req, res) => {
           totalBills:    bills.length,
           electricityAvg,
           waterAvg,
+          salary:        user.salary || 0,
           createdAt:     user.createdAt,
           joined:        user.createdAt.toLocaleString("default", { month: "short", year: "numeric" }),
           lastActive:    lastBill
@@ -165,6 +262,7 @@ export const getAllUsers = async (req, res) => {
 
     res.json({ success: true, users: usersWithStats });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
@@ -195,31 +293,54 @@ export const updateUserStatus = async (req, res) => {
 
     res.json({ success: true, message: `User ${status}d successfully`, user });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
 // ─────────────────────────────────────────
 // GET /api/admin/activity
-// Recent bill additions and user registrations
+// Recent bill additions and user registrations (WITH anomaly detection)
 // ─────────────────────────────────────────
 export const getRecentActivity = async (req, res) => {
   try {
     const [recentBills, recentUsers] = await Promise.all([
-      Bill.find().sort({ createdAt: -1 }).limit(5).populate("user", "name"),
-      User.find({ role: "user" }).sort({ createdAt: -1 }).limit(3).select("name createdAt"),
+      Bill.find().sort({ createdAt: -1 }).limit(10).populate("user", "name"),
+      User.find({ role: "user" }).sort({ createdAt: -1 }).limit(5).select("name createdAt"),
     ]);
 
-    // ✅ FIXED: store raw Date for sorting, then convert to string
-    const billActivity = recentBills.map(b => ({
-      id:        b._id,
-      user:      b.user?.name || "Unknown",
-      action:    `Added ${b.utilityType.toLowerCase()} bill`,
-      amount:    b.billAmount,
-      time:      timeAgo(new Date(b.createdAt)),
-      _sortDate: b.createdAt,   // ← real Date for sorting
-      type:      "bill",
-    }));
+    const billActivity = [];
+    
+    // Process each bill and check for anomalies
+    for (const bill of recentBills) {
+      // Get previous 3 bills for this user and utility
+      const olderBills = await Bill.find({
+        user: bill.user,
+        utilityType: bill.utilityType,
+        _id: { $ne: bill._id }
+      }).sort({ billingMonth: -1 }).limit(3);
+      
+      let isAnomaly = false;
+      let percentIncrease = 0;
+      
+      if (olderBills.length >= 3) {
+        const avgPrev = olderBills.reduce((s, b) => s + b.billAmount, 0) / olderBills.length;
+        percentIncrease = ((bill.billAmount - avgPrev) / avgPrev) * 100;
+        isAnomaly = percentIncrease > 20;
+      }
+      
+      billActivity.push({
+        id:        bill._id,
+        user:      bill.user?.name || "Unknown",
+        action:    isAnomaly 
+          ? `⚠️ UNUSUAL: ${bill.utilityType} bill is ${percentIncrease.toFixed(0)}% above average` 
+          : `Added ${bill.utilityType.toLowerCase()} bill`,
+        amount:    bill.billAmount,
+        time:      timeAgo(new Date(bill.createdAt)),
+        _sortDate: bill.createdAt,
+        type:      isAnomaly ? "alert" : "bill",
+      });
+    }
 
     const userActivity = recentUsers.map(u => ({
       id:        u._id,
@@ -227,18 +348,19 @@ export const getRecentActivity = async (req, res) => {
       action:    "Registered account",
       amount:    null,
       time:      timeAgo(new Date(u.createdAt)),
-      _sortDate: u.createdAt,   // ← real Date for sorting
+      _sortDate: u.createdAt,
       type:      "user",
     }));
 
-    // ✅ FIXED: sort by real timestamp, not by "3 days ago" string
+    // Sort by real timestamp
     const activity = [...billActivity, ...userActivity]
       .sort((a, b) => new Date(b._sortDate) - new Date(a._sortDate))
-      .slice(0, 8)
-      .map(({ _sortDate, ...rest }) => rest); // strip internal field before sending
+      .slice(0, 10)
+      .map(({ _sortDate, ...rest }) => rest);
 
     res.json({ success: true, activity });
   } catch (error) {
+    console.error(error);
     res.status(500).json({ success: false, message: "Server error" });
   }
 };
