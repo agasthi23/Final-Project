@@ -13,6 +13,7 @@ import reportsRoutes from "./routes/reportsRoutes.js";
 import predictionsRoutes from "./routes/predictionsRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
 import dashboardRoutes from "./routes/dashboardRoutes.js";
+import userRoutes from "./routes/userRoutes.js";
 
 
 
@@ -42,6 +43,7 @@ app.use("/api/reports", reportsRoutes);
 app.use("/api/predictions", predictionsRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/dashboard", dashboardRoutes);
+app.use("/api/users", userRoutes);
 
 import scheduler from './services/scheduler.js';
 scheduler.start();
