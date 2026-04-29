@@ -1,4 +1,4 @@
-// src/pages/ProfilePage.jsx
+// src/pages/ProfilePage.jsx — Updated with Budget Mode toggle in Preferences
 import { useState, useEffect, useCallback } from "react";
 import {
   FiUser, FiMail, FiEdit2, FiSave, FiX, FiLock,
@@ -45,13 +45,14 @@ if (!document.getElementById("prof-anim")) {
     .pf-toggle-input:checked + .pf-toggle-track .pf-toggle-thumb { transform:translateX(20px); }
     @keyframes spin { to { transform: rotate(360deg); } }
     .spinner { animation: spin 1s linear infinite; }
+    .pf-budget-btn { transition: all .15s ease; }
+    .pf-budget-btn:hover { opacity: 0.85; }
   `;
   document.head.appendChild(s);
 }
 
 const F = "'Plus Jakarta Sans',-apple-system,sans-serif";
 
-// Btn and Field now accept colors as props so they work outside the component
 const Btn = ({ variant="secondary", onClick, children, style={}, disabled=false, colors }) => {
   const C = colors;
   const variants = {
@@ -99,7 +100,6 @@ const ProfilePage = () => {
   const { logout, updateUser } = useAuth();
   const { darkMode, toggleDarkMode } = useTheme();
 
-  // ── C is now INSIDE the component so it reacts to darkMode ──
   const C = {
     page:    darkMode ? "#0f172a" : "#f3f4f8",
     card:    darkMode ? "#1e293b" : "#ffffff",
@@ -122,6 +122,9 @@ const ProfilePage = () => {
     red:     "#dc2626",
     redL:    darkMode ? "rgba(220,38,38,0.15)"  : "#fef2f2",
     redM:    darkMode ? "#7f1d1d"               : "#fecaca",
+    teal:    "#0891b2",
+    tealL:   darkMode ? "rgba(8,145,178,0.15)"  : "#ecfeff",
+    tealM:   darkMode ? "#164e63"               : "#a5f3fc",
     violet:  "#7c3aed",
     violetL: darkMode ? "rgba(124,58,237,0.15)" : "#f5f3ff",
     violetM: darkMode ? "#4c1d95"               : "#ddd6fe",
@@ -130,7 +133,7 @@ const ProfilePage = () => {
     s3: "0 12px 40px rgba(15,23,42,.10),0 4px 8px rgba(15,23,42,.04)",
   };
 
-  // State
+  // ── Profile state ────────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [profileData, setProfileData] = useState({ fullName: "", email: "", role: "Account Owner" });
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -144,6 +147,13 @@ const ProfilePage = () => {
   const [saving, setSaving] = useState(false);
   const [profilePicture, setProfilePicture] = useState(null);
   const [uploading, setUploading] = useState(false);
+
+  // ── Budget Mode state ────────────────────────────────────────────────────────
+  const [budgetMode,   setBudgetModeState]  = useState("salary"); // "salary" | "fixed"
+  const [fixedBudget,  setFixedBudgetState] = useState(0);
+  const [fixedBudgetInput, setFixedBudgetInput] = useState("0");
+  const [savingBudget, setSavingBudget]     = useState(false);
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const loadProfile = useCallback(async () => {
     try {
@@ -170,6 +180,18 @@ const ProfilePage = () => {
       }
     } catch (error) {
       console.error("Failed to load preferences:", error);
+    }
+
+    // Load budget mode separately
+    try {
+      const budgetRes = await authAPI.getBudgetMode();
+      if (budgetRes.data?.success) {
+        setBudgetModeState(budgetRes.data.budgetMode || "salary");
+        setFixedBudgetState(budgetRes.data.fixedBudget || 0);
+        setFixedBudgetInput(String(budgetRes.data.fixedBudget || 0));
+      }
+    } catch (error) {
+      console.error("Failed to load budget mode:", error);
     }
   }, []);
 
@@ -202,6 +224,47 @@ const ProfilePage = () => {
     const { name, value } = e.target;
     setPasswordData({ ...passwordData, [name]: value });
   };
+
+  // ── Budget Mode handlers ──────────────────────────────────────────────────────
+  const handleSelectBudgetMode = async (mode) => {
+    // When switching to salary mode, save immediately (no amount needed)
+    // When switching to fixed mode, just update local state — user still needs to enter amount
+    if (mode === "salary") {
+      setSavingBudget(true);
+      try {
+        await authAPI.updateBudgetMode({ budgetMode: "salary", fixedBudget: fixedBudget });
+        setBudgetModeState("salary");
+        showNotification("Switched to Salary-Based mode!");
+      } catch {
+        showNotification("Failed to update budget mode", "error");
+      } finally {
+        setSavingBudget(false);
+      }
+    } else {
+      // Just switch the UI, user will click Save to persist
+      setBudgetModeState("fixed");
+    }
+  };
+
+  const handleSaveFixedBudget = async () => {
+    const amount = Number(fixedBudgetInput);
+    if (isNaN(amount) || amount < 0) {
+      showNotification("Please enter a valid budget amount", "error");
+      return;
+    }
+    setSavingBudget(true);
+    try {
+      await authAPI.updateBudgetMode({ budgetMode: "fixed", fixedBudget: amount });
+      setBudgetModeState("fixed");
+      setFixedBudgetState(amount);
+      showNotification("Fixed budget saved successfully!");
+    } catch {
+      showNotification("Failed to save fixed budget", "error");
+    } finally {
+      setSavingBudget(false);
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────────
 
   const validateProfileForm = () => {
     const newErrors = {};
@@ -284,7 +347,6 @@ const ProfilePage = () => {
     ? profileData.fullName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)
     : "U";
 
-  // IconWrap also needs C — defined inside component so it has access
   const IconWrap = ({ color, bg, bdr, children }) => (
     <div style={{ width:38, height:38, borderRadius:10, display:"flex", alignItems:"center",
       justifyContent:"center", background:bg, border:`1px solid ${bdr}`,
@@ -403,6 +465,7 @@ const ProfilePage = () => {
 
         {/* MAIN CONTENT */}
         <main>
+          {/* ── PROFILE TAB ── */}
           {activeTab === "profile" && (
             <div className="pf-fu" style={{ display:"flex", flexDirection:"column", gap:16 }}>
               <div className="pf-card" style={{ background:C.card, border:`1px solid ${C.border}`,
@@ -466,6 +529,7 @@ const ProfilePage = () => {
             </div>
           )}
 
+          {/* ── PREFERENCES TAB ── */}
           {activeTab === "preferences" && (
             <div className="pf-fu">
               <div className="pf-card" style={{ background:C.card, border:`1px solid ${C.border}`,
@@ -474,6 +538,8 @@ const ProfilePage = () => {
                   <h2 style={{ fontSize:"1rem", fontWeight:700, color:C.ink, margin:"0 0 3px" }}>Preferences</h2>
                   <p style={{ fontSize:"0.78rem", color:C.muted, margin:0 }}>Customize your experience and notifications</p>
                 </div>
+
+                {/* ── Toggle switches ── */}
                 <div style={{ padding:"8px 0" }}>
                   {[
                     { key:"darkMode", label:"Dark Mode", desc:"Switch between light and dark interface",
@@ -485,7 +551,7 @@ const ProfilePage = () => {
                       icon:<FiAlertTriangle size={16}/>, accent:C.amber, bg:C.amberL, bdr:C.amberM },
                   ].map((s,i,arr) => (
                     <div key={s.key} style={{ display:"flex", alignItems:"center", gap:14,
-                      padding:"18px 24px", borderBottom: i<arr.length-1 ? `1px solid ${C.border}` : "none" }}>
+                      padding:"18px 24px", borderBottom:`1px solid ${C.border}` }}>
                       <IconWrap color={s.accent} bg={s.bg} bdr={s.bdr}>{s.icon}</IconWrap>
                       <div style={{ flex:1 }}>
                         <h4 style={{ fontSize:"0.875rem", fontWeight:600, color:C.ink, margin:"0 0 2px" }}>{s.label}</h4>
@@ -500,10 +566,197 @@ const ProfilePage = () => {
                     </div>
                   ))}
                 </div>
+
+                {/* ── Budget Mode section ── */}
+                <div style={{ padding:"22px 24px" }}>
+                  <div style={{ marginBottom:16 }}>
+                    <h4 style={{ fontSize:"0.875rem", fontWeight:700, color:C.ink, margin:"0 0 4px" }}>
+                      Budget Planning Mode
+                    </h4>
+                    <p style={{ fontSize:"0.78rem", color:C.muted, margin:0 }}>
+                      Choose how your utility budget limit is calculated on the Budget page
+                    </p>
+                  </div>
+
+                  {/* Mode selector buttons */}
+                  <div style={{ display:"flex", gap:10, marginBottom:16 }}>
+                    {[
+                      {
+                        key:   "salary",
+                        label: "💰 Salary Based",
+                        sub:   "8% of your monthly salary",
+                        accent: C.green,
+                        bg:     C.greenL,
+                        bdr:    C.greenM,
+                      },
+                      {
+                        key:   "fixed",
+                        label: "📊 Fixed Budget",
+                        sub:   "Set your own monthly limit",
+                        accent: C.teal,
+                        bg:     C.tealL,
+                        bdr:    C.tealM,
+                      },
+                    ].map(opt => {
+                      const isActive = budgetMode === opt.key;
+                      return (
+                        <button
+                          key={opt.key}
+                          className="pf-budget-btn"
+                          disabled={savingBudget}
+                          onClick={() => handleSelectBudgetMode(opt.key)}
+                          style={{
+                            flex: 1,
+                            padding: "14px 16px",
+                            borderRadius: 12,
+                            cursor: savingBudget ? "not-allowed" : "pointer",
+                            textAlign: "left",
+                            border: `2px solid ${isActive ? opt.accent : C.border}`,
+                            background: isActive ? opt.bg : C.hover,
+                            fontFamily: F,
+                          }}
+                        >
+                          <div style={{
+                            fontWeight: 700,
+                            fontSize: "0.875rem",
+                            color: isActive ? opt.accent : C.body,
+                            marginBottom: 3,
+                          }}>
+                            {opt.label}
+                          </div>
+                          <div style={{
+                            fontSize: "0.72rem",
+                            color: isActive ? opt.accent : C.muted,
+                          }}>
+                            {opt.sub}
+                          </div>
+                          {isActive && (
+                            <div style={{
+                              marginTop: 6,
+                              display: "inline-flex",
+                              alignItems: "center",
+                              gap: 4,
+                              fontSize: "0.65rem",
+                              fontWeight: 700,
+                              color: opt.accent,
+                              background: "rgba(255,255,255,0.6)",
+                              padding: "2px 8px",
+                              borderRadius: 999,
+                            }}>
+                              <FiCheck size={10}/> Active
+                            </div>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Fixed budget amount input — only shown in fixed mode */}
+                  {budgetMode === "fixed" && (
+                    <div style={{
+                      background: C.hover,
+                      border: `1px solid ${C.border}`,
+                      borderRadius: 12,
+                      padding: "16px 18px",
+                    }}>
+                      <label style={{
+                        display: "block",
+                        fontSize: "0.72rem",
+                        fontWeight: 700,
+                        textTransform: "uppercase",
+                        letterSpacing: "0.07em",
+                        color: C.muted,
+                        marginBottom: 10,
+                        fontFamily: F,
+                      }}>
+                        Monthly Utility Budget (Rs.)
+                      </label>
+
+                      <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+                        <div style={{
+                          flex: 1,
+                          display: "flex",
+                          alignItems: "center",
+                          border: `1.5px solid ${C.border}`,
+                          borderRadius: 10,
+                          background: C.card,
+                          overflow: "hidden",
+                        }}>
+                          <span style={{
+                            padding: "0 14px",
+                            fontSize: "0.8rem",
+                            fontWeight: 700,
+                            color: C.muted,
+                            borderRight: `1px solid ${C.border}`,
+                            whiteSpace: "nowrap",
+                          }}>
+                            Rs.
+                          </span>
+                          <input
+                            type="number"
+                            value={fixedBudgetInput}
+                            onChange={e => setFixedBudgetInput(e.target.value)}
+                            placeholder="e.g. 8000"
+                            min="0"
+                            className="pf-input"
+                            style={{
+                              flex: 1,
+                              border: "none",
+                              outline: "none",
+                              background: "transparent",
+                              padding: "11px 14px",
+                              fontFamily: F,
+                              fontSize: "1rem",
+                              fontWeight: 600,
+                              color: C.ink,
+                            }}
+                          />
+                        </div>
+
+                        <Btn
+                          colors={C}
+                          variant="primary"
+                          disabled={savingBudget}
+                          onClick={handleSaveFixedBudget}
+                          style={{ padding:"10px 20px" }}
+                        >
+                          <FiSave size={14}/>
+                          {savingBudget ? "Saving..." : "Save Budget"}
+                        </Btn>
+                      </div>
+
+                      <p style={{ fontSize:"0.72rem", color:C.muted, margin:"10px 0 0", fontFamily:F }}>
+                        This amount will be used as the total utility budget limit on the Budget page.
+                        {fixedBudget > 0 && (
+                          <span style={{ color:C.teal, fontWeight:600 }}>
+                            {" "}Current: Rs. {fixedBudget.toLocaleString()}
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Salary mode info box */}
+                  {budgetMode === "salary" && (
+                    <div style={{
+                      background: C.greenL,
+                      border: `1px solid ${C.greenM}`,
+                      borderRadius: 10,
+                      padding: "12px 16px",
+                      fontSize: "0.78rem",
+                      color: C.green,
+                      fontFamily: F,
+                    }}>
+                      <strong>How it works:</strong> The Budget page will use 8% of your monthly salary
+                      as the recommended utility spending limit. Update your salary on the Budget page.
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
 
+          {/* ── SECURITY TAB ── */}
           {activeTab === "security" && (
             <div className="pf-fu" style={{ display:"flex", flexDirection:"column", gap:16 }}>
               <div className="pf-card" style={{ background:C.card, border:`1px solid ${C.border}`,
