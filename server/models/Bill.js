@@ -10,7 +10,7 @@ const billSchema = new mongoose.Schema(
     },
     utilityType: {
       type: String,
-      enum: ["Electricity", "Water"],
+      enum: ["Electricity", "Water", "Internet"],
       required: true,
     },
     billingMonth: {
