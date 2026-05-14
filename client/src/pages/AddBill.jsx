@@ -147,6 +147,17 @@ export default function AddBill() {
   const [filterType,   setFilterType]   = useState("All");
   const [sortDir,      setSortDir]      = useState("desc");
 
+  // Import tabs
+  const [activeImportTab, setActiveImportTab] = useState('manual');
+  const [pasteText,       setPasteText]       = useState('');
+  const [extractedData,   setExtractedData]   = useState(null);
+
+  // File upload states
+  const [dragActive,      setDragActive]      = useState(false);
+  const [fileUploading,   setFileUploading]   = useState(false);
+  const [fileExtractedData, setFileExtractedData] = useState(null);
+  const [fileError,       setFileError]       = useState(null);
+
   const billingMonthKey = selYear && selMonth ? `${selYear}-${selMonth}` : "";
   const isInternet = utilityType === "Internet";
   const costPerUnit = !isInternet && unitsUsed && billAmount && Number(unitsUsed) > 0
@@ -169,6 +180,33 @@ export default function AddBill() {
       setFetchLoading(false);
     }
   };
+
+  // ─── Paste image from clipboard support ────────────────────────────────────────
+  useEffect(() => {
+    const handlePaste = (e) => {
+      // Only handle paste when File Upload tab is active
+      if (activeImportTab !== 'file') return;
+      
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          const file = items[i].getAsFile();
+          if (file) {
+            console.log("📋 Image pasted from clipboard:", file.name);
+            processFileUpload(file);
+            // Show a quick visual feedback
+            setFileError(null);
+            break;
+          }
+        }
+      }
+    };
+    
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [activeImportTab]);
 
   const filteredBills = useMemo(() => {
     let list = filterType === "All" ? bills : bills.filter(b => b.utilityType === filterType);
@@ -267,6 +305,235 @@ export default function AddBill() {
   };
   const cancelEdit = () => setEditId(null);
 
+  // Unified parser - Handles BOTH SMS and Portal formats
+  const parseBillText = (text) => {
+    console.log("📝 Parsing bill text...");
+    
+    // ========== DETECT ELECTRICITY (CEB) ==========
+    if (text.includes('CEB e-Bill') || text.includes('kWh') || text.includes('Import')) {
+      console.log("✅ Detected: Electricity bill");
+      
+      // ----- EXTRACT MONTH -----
+      let month = "04";
+      let year = "2026";
+      let monthDisplay = "April 2026";
+      
+      // Try portal format: "Billing Month | 2026-APRIL"
+      let monthMatch = text.match(/Billing Month\s*\|\s*(\d{4})-(\w+)/i);
+      
+      // Try SMS format: Look for date in "2026-04-15" format
+      if (!monthMatch) {
+        const dateMatch = text.match(/(\d{4})-(\d{2})-\d{2}/);
+        if (dateMatch) {
+          year = dateMatch[1];
+          month = dateMatch[2];
+          const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+          monthDisplay = `${monthNames[parseInt(month) - 1]} ${year}`;
+        }
+      } else {
+        year = monthMatch[1];
+        const monthName = monthMatch[2];
+        const monthNames = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
+        const monthIndex = monthNames.findIndex(m => m === monthName);
+        if (monthIndex !== -1) {
+          month = String(monthIndex + 1).padStart(2, '0');
+          monthDisplay = `${monthNames[monthIndex].charAt(0) + monthNames[monthIndex].slice(1).toLowerCase()} ${year}`;
+        }
+      }
+      
+      // ----- EXTRACT UNITS -----
+      let units = 0;
+      // Portal format: "Import : 123 kWh" or "Import 123 kWh"
+      let unitsMatch = text.match(/Import\s*:?\s*(\d+)\s*kWh/i);
+      // SMS format: "Reading: 32671 - 32548 = 123 Units"
+      if (!unitsMatch) {
+        unitsMatch = text.match(/=\s*(\d+)\s*Units?/i);
+      }
+      if (unitsMatch) {
+        units = parseInt(unitsMatch[1]);
+      }
+      
+      // ----- EXTRACT AMOUNT -----
+      let amount = 0;
+      // Portal format: "Monthly Bill : 3,927.18 LKR"
+      // SMS format: "Monthly Bill: Rs. 3,927.18"
+      let amountMatch = text.match(/Monthly Bill\s*:?\s*Rs?\.?\s*([\d,]+\.?\d*)/i);
+      if (!amountMatch) {
+        amountMatch = text.match(/Monthly Bill\s*:?\s*([\d,]+\.?\d*)\s*LKR/i);
+      }
+      if (amountMatch) {
+        amount = parseFloat(amountMatch[1].replace(/,/g, ''));
+      }
+      
+      if (amount > 0) {
+        return {
+          utility: 'Electricity',
+          month: `${year}-${month}`,
+          monthDisplay: monthDisplay,
+          year: year,
+          monthNum: month,
+          units: units,
+          amount: amount
+        };
+      }
+    }
+    
+    // ========== DETECT WATER (NWSDB) ==========
+    if (text.includes('NWSDB') || text.includes('Water Board') || text.includes('National Water Supply')) {
+      console.log("✅ Detected: Water bill");
+      
+      // ----- EXTRACT MONTH -----
+      let month = "04";
+      let year = "2026";
+      let monthDisplay = "April 2026";
+      
+      // Look for period: "Period : 21-03-2026 to 20-04-2026"
+      const periodMatch = text.match(/Period\s*:?\s*\d{2}-\d{2}-(\d{4})\s*to\s*\d{2}-\d{2}-(\d{4})/i);
+      if (periodMatch) {
+        year = periodMatch[2]; // End year is current billing year
+        // Extract month from end date (20-04-2026 -> April)
+        const endDateMatch = text.match(/to\s*\d{2}-(\d{2})-(\d{4})/i);
+        if (endDateMatch) {
+          month = endDateMatch[1];
+          const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+          monthDisplay = `${monthNames[parseInt(month) - 1]} ${year}`;
+        }
+      }
+      
+      // Alternative: "BILLING MONTH : 2026 APRIL"
+      if (!periodMatch) {
+        const monthMatch = text.match(/BILLING MONTH\s*:?\s*(\d{4})\s*(\w+)/i);
+        if (monthMatch) {
+          year = monthMatch[1];
+          const monthName = monthMatch[2];
+          const monthNames = ["JANUARY", "FEBRUARY", "MARCH", "APRIL", "MAY", "JUNE", "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER"];
+          const monthIndex = monthNames.findIndex(m => m === monthName.toUpperCase());
+          if (monthIndex !== -1) {
+            month = String(monthIndex + 1).padStart(2, '0');
+            monthDisplay = `${monthNames[monthIndex].charAt(0) + monthNames[monthIndex].slice(1).toLowerCase()} ${year}`;
+          }
+        }
+      }
+      
+      // ----- EXTRACT UNITS -----
+      let units = 0;
+      const unitsMatch = text.match(/Consumption\s*:?\s*\d+\s*-\s*\d+\s*=\s*(\d+)/i);
+      if (unitsMatch) {
+        units = parseInt(unitsMatch[1]);
+      }
+      
+      // ----- EXTRACT AMOUNT -----
+      let amount = 0;
+      const amountMatch = text.match(/Monthly Bill\s*:?\s*Rs?\.?\s*([\d,]+\.?\d*)/i);
+      if (amountMatch) {
+        amount = parseFloat(amountMatch[1].replace(/,/g, ''));
+      }
+      
+      if (amount > 0) {
+        return {
+          utility: 'Water',
+          month: `${year}-${month}`,
+          monthDisplay: monthDisplay,
+          year: year,
+          monthNum: month,
+          units: units,
+          amount: amount
+        };
+      }
+    }
+    
+    console.log("❌ Could not detect utility type");
+    return null;
+  };
+
+  // Handle paste import
+  const handlePasteImport = () => {
+    console.log("Raw paste text:", pasteText);
+    
+    const parsed = parseBillText(pasteText);
+    console.log("Parsed result:", parsed);
+    
+    if (parsed) {
+      setUtilityType(parsed.utility);
+      setUnitsUsed(parsed.units.toString());
+      setBillAmount(parsed.amount.toString());
+      
+      // Set month and year
+      if (parsed.year && parsed.monthNum) {
+        setSelYear(parsed.year);
+        setSelMonth(parsed.monthNum);
+        console.log(`Setting month to: ${parsed.monthNum}/${parsed.year}`);
+      }
+      
+      setExtractedData(parsed);
+      setActiveImportTab('manual');
+      
+      // Scroll to form
+      setTimeout(() => {
+        document.querySelector('.ab-submit')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 100);
+      
+      alert(`✅ Extracted ${parsed.utility} bill for ${parsed.monthDisplay}\nUnits: ${parsed.units}\nAmount: Rs. ${parsed.amount.toLocaleString()}`);
+    } else {
+      alert('❌ Could not parse the text. Please check the format or use manual entry.\n\nMake sure you copied the full text including "Billing Month" and "Monthly Bill".');
+    }
+  };
+
+  // Handle file drop
+  const handleFileDrop = async (e) => {
+    e.preventDefault();
+    setDragActive(false);
+    const file = e.dataTransfer.files[0];
+    await processFileUpload(file);
+  };
+
+  // Handle file select
+  const handleFileSelect = async (e) => {
+    const file = e.target.files[0];
+    await processFileUpload(file);
+  };
+
+  // Process file upload to backend
+  const processFileUpload = async (file) => {
+    if (!file) return;
+    
+    if (file.size > 5 * 1024 * 1024) {
+      setFileError("File too large. Max 5MB.");
+      return;
+    }
+    
+    setFileUploading(true);
+    setFileError(null);
+    setFileExtractedData(null);
+    
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    try {
+      const token = localStorage.getItem('authToken');
+      const response = await fetch('http://localhost:5000/api/upload/extract-bill', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+      
+      const data = await response.json();
+      
+      if (data.success && data.parsed) {
+        setFileExtractedData(data.parsed);
+      } else {
+        setFileError(data.error || "Could not extract bill data. Try copy-paste method.");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      setFileError("Server error. Please try again.");
+    } finally {
+      setFileUploading(false);
+    }
+  };
+
   // Shared input style helpers (stable references via useMemo)
   const inputBase = useMemo(() => ({
     width:"100%", padding:"11px 14px", borderRadius:10,
@@ -298,7 +565,297 @@ export default function AddBill() {
         </p>
       </div>
 
+      {/* IMPORT TABS */}
+      <div className="ab-fu" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', gap: 8, borderBottom: `1px solid ${C.border}`, marginBottom: 16 }}>
+          <button
+            onClick={() => setActiveImportTab('manual')}
+            style={{ padding: '10px 20px', background: 'transparent', border: 'none', borderBottom: activeImportTab === 'manual' ? `2px solid ${C.blue}` : 'none', color: activeImportTab === 'manual' ? C.blue : C.muted, fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}
+          >
+            ✍️ Manual Entry
+          </button>
+          <button
+            onClick={() => setActiveImportTab('paste')}
+            style={{ padding: '10px 20px', background: 'transparent', border: 'none', borderBottom: activeImportTab === 'paste' ? `2px solid ${C.blue}` : 'none', color: activeImportTab === 'paste' ? C.blue : C.muted, fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}
+          >
+            📋 Quick Import (Copy-Paste)
+          </button>
+          <button
+            onClick={() => setActiveImportTab('file')}
+            style={{ padding: '10px 20px', background: 'transparent', border: 'none', borderBottom: activeImportTab === 'file' ? `2px solid ${C.blue}` : 'none', color: activeImportTab === 'file' ? C.blue : C.muted, fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer' }}
+          >
+            📄 Upload Bill
+          </button>
+        </div>
+
+        {/* Manual Entry Tab - Your existing form */}
+        {activeImportTab === 'manual' && (
+          <div></div>
+        )}
+
+        {/* Quick Import Tab - Copy-Paste */}
+        {activeImportTab === 'paste' && (
+          <Card C={C} style={{ animationDelay: ".06s" }}>
+            <div style={{ padding: "22px 24px 18px", borderBottom: `1px solid ${C.border}`, marginBottom: 20 }}>
+              <h2 style={{ fontSize: "1rem", fontWeight: 700, color: C.ink, margin: 0 }}>📋 Quick Import from e-Bill Portal</h2>
+              <p style={{ fontSize: "0.72rem", color: C.muted, margin: "3px 0 0" }}>
+                Copy the text from your CEB or NWSDB e-Bill portal and paste below
+              </p>
+            </div>
+
+            <div style={{ padding: "0 24px 24px" }}>
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: "block", fontSize: "0.78rem", fontWeight: 600, color: C.body, marginBottom: 6 }}>
+                  📄 Paste Portal Text Here
+                </label>
+                <textarea
+                  rows={10}
+                  placeholder={`Example from CEB portal:\nAccount Number : 2101256800\nBilling Month : 2026-APRIL\nImport : 123 kWh\nMonthly Bill : 3,927.18 LKR\n\nExample from NWSDB portal:\nAccount Number : 10/45/281/085/17\nBILLING MONTH : 2026 APRIL\nConsumption : 24\nMonthly Bill : 2,985.40 LKR`}
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "14px",
+                    borderRadius: 10,
+                    border: `1.5px solid ${C.border}`,
+                    background: C.hover,
+                    color: C.ink,
+                    fontFamily: "monospace",
+                    fontSize: "0.8rem",
+                    lineHeight: 1.5,
+                    resize: "vertical"
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+                <button
+                  onClick={handlePasteImport}
+                  disabled={!pasteText.trim()}
+                  style={{
+                    padding: "12px 24px",
+                    borderRadius: 10,
+                    background: !pasteText.trim() ? C.faint : C.blue,
+                    color: "#fff",
+                    border: "none",
+                    fontSize: "0.875rem",
+                    fontWeight: 600,
+                    cursor: !pasteText.trim() ? "not-allowed" : "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8
+                  }}
+                >
+                  <FiCheck size={16} /> Extract & Fill Form
+                </button>
+                <button
+                  onClick={() => setPasteText("")}
+                  style={{
+                    padding: "12px 24px",
+                    borderRadius: 10,
+                    background: "transparent",
+                    border: `1px solid ${C.border}`,
+                    color: C.muted,
+                    fontSize: "0.875rem",
+                    fontWeight: 500,
+                    cursor: "pointer"
+                  }}
+                >
+                  Clear
+                </button>
+              </div>
+
+              {extractedData && (
+                <div style={{
+                  background: C.greenL,
+                  border: `1px solid ${C.greenM}`,
+                  borderRadius: 10,
+                  padding: "14px",
+                  marginBottom: 16
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <FiCheck size={16} color={C.green} />
+                    <span style={{ fontWeight: 700, color: C.green }}>Extracted Successfully!</span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: "0.85rem" }}>
+                    <span style={{ color: C.muted }}>Utility:</span>
+                    <span style={{ fontWeight: 600 }}>{extractedData.utility}</span>
+                    <span style={{ color: C.muted }}>Month:</span>
+                    <span style={{ fontWeight: 600 }}>{extractedData.monthDisplay || extractedData.month}</span>
+                    <span style={{ color: C.muted }}>Units:</span>
+                    <span style={{ fontWeight: 600 }}>{extractedData.units} {extractedData.utility === 'Electricity' ? 'kWh' : 'Units'}</span>
+                    <span style={{ color: C.muted }}>Amount:</span>
+                    <span style={{ fontWeight: 600 }}>Rs. {extractedData.amount?.toLocaleString()}</span>
+                  </div>
+                  <p style={{ fontSize: "0.7rem", color: C.muted, marginTop: 8, marginBottom: 0 }}>
+                    ✅ Form has been auto-filled. Click "Add Bill" to save.
+                  </p>
+                </div>
+              )}
+
+              <div style={{
+                background: C.blueL,
+                border: `1px solid ${C.blueM}`,
+                borderRadius: 10,
+                padding: "12px 14px",
+                marginTop: 8
+              }}>
+                <p style={{ fontSize: "0.7rem", color: C.blue, margin: 0, fontWeight: 500 }}>
+                  💡 <strong>How it works:</strong> Open the link from your SMS, view the e-Bill portal, 
+                  copy all the text, paste here, and click "Extract & Fill Form". The system will 
+                  automatically fill the form for you!
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
+
+        {/* File Upload Tab */}
+        {activeImportTab === 'file' && (
+          <Card C={C} style={{ animationDelay: ".06s" }}>
+            <div style={{ padding: "22px 24px 18px", borderBottom: `1px solid ${C.border}`, marginBottom: 20 }}>
+              <h2 style={{ fontSize: "1rem", fontWeight: 700, color: C.ink, margin: 0 }}>📄 Upload Bill (PDF or Image)</h2>
+              <p style={{ fontSize: "0.72rem", color: C.muted, margin: "3px 0 0" }}>
+                Upload your e-Bill PDF or screenshot - we'll extract the data automatically!
+              </p>
+            </div>
+
+            <div style={{ padding: "0 24px 24px" }}>
+              {/* Upload Area */}
+              <div
+                onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+                onDragLeave={() => setDragActive(false)}
+                onDrop={handleFileDrop}
+                onClick={() => document.getElementById('fileInput').click()}
+                style={{
+                  border: `2px dashed ${dragActive ? C.blue : C.border}`,
+                  borderRadius: 12,
+                  padding: "40px 20px",
+                  textAlign: "center",
+                  background: dragActive ? C.blueL : C.hover,
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  marginBottom: 16
+                }}
+              >
+                <div style={{ fontSize: "2rem", marginBottom: 8 }}>📁</div>
+                <p style={{ fontSize: "0.85rem", color: C.ink, margin: 0 }}>
+                  {fileUploading ? "⏳ Processing..." : "Drag & drop or click to upload"}
+                </p>
+                <p style={{ fontSize: "0.7rem", color: C.muted, marginTop: 4 }}>
+                  Supports PDF, PNG, JPG (Max 5MB)
+                </p>
+              </div>
+
+              <input
+                id="fileInput"
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg"
+                onChange={handleFileSelect}
+                style={{ display: "none" }}
+              />
+
+              {/* Progress indicator */}
+              {fileUploading && (
+                <div style={{
+                  background: C.blueL,
+                  borderRadius: 10,
+                  padding: "12px",
+                  marginBottom: 16,
+                  textAlign: "center"
+                }}>
+                  <div style={{ fontSize: "0.8rem", color: C.blue }}>
+                    🔄 Extracting bill data... (may take a few seconds)
+                  </div>
+                </div>
+              )}
+
+              {/* Success - Show extracted data */}
+              {fileExtractedData && (
+                <div style={{
+                  background: C.greenL,
+                  border: `1px solid ${C.greenM}`,
+                  borderRadius: 10,
+                  padding: "14px",
+                  marginBottom: 16
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                    <FiCheck size={16} color={C.green} />
+                    <span style={{ fontWeight: 700, color: C.green }}>✅ Extracted Successfully!</span>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, fontSize: "0.85rem" }}>
+                    <span style={{ color: C.muted }}>Utility:</span>
+                    <span style={{ fontWeight: 600 }}>{fileExtractedData.utility}</span>
+                    <span style={{ color: C.muted }}>Month:</span>
+                    <span style={{ fontWeight: 600 }}>{fileExtractedData.monthDisplay}</span>
+                    <span style={{ color: C.muted }}>Units:</span>
+                    <span style={{ fontWeight: 600 }}>{fileExtractedData.units}</span>
+                    <span style={{ color: C.muted }}>Amount:</span>
+                    <span style={{ fontWeight: 600 }}>Rs. {fileExtractedData.amount?.toLocaleString()}</span>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setUtilityType(fileExtractedData.utility);
+                      setUnitsUsed(fileExtractedData.units.toString());
+                      setBillAmount(fileExtractedData.amount.toString());
+                      setSelYear(fileExtractedData.year);
+                      setSelMonth(fileExtractedData.monthNum);
+                      setActiveImportTab('manual');
+                      setFileExtractedData(null);
+                    }}
+                    style={{
+                      marginTop: 12,
+                      padding: "8px 16px",
+                      borderRadius: 8,
+                      background: C.blue,
+                      color: "#fff",
+                      border: "none",
+                      cursor: "pointer",
+                      fontSize: "0.8rem",
+                      width: "100%"
+                    }}
+                  >
+                    📝 Use This Data & Fill Form →
+                  </button>
+                </div>
+              )}
+
+              {/* Error message */}
+              {fileError && (
+                <div style={{
+                  background: C.redL,
+                  border: `1px solid ${C.redM}`,
+                  borderRadius: 10,
+                  padding: "12px",
+                  marginBottom: 16,
+                  color: C.red,
+                  fontSize: "0.8rem"
+                }}>
+                  ❌ {fileError}
+                </div>
+              )}
+
+              {/* Instructions */}
+              <div style={{
+                background: C.blueL,
+                border: `1px solid ${C.blueM}`,
+                borderRadius: 10,
+                padding: "12px 14px"
+              }}>
+                <p style={{ fontSize: "0.7rem", color: C.blue, margin: 0, fontWeight: 500 }}>
+                  💡 <strong>How it works:</strong><br/>
+                  • <strong>PDF:</strong> Download e-Bill from portal → Upload here → Auto-extracted<br/>
+                  • <strong>Screenshot:</strong> Take photo of bill → Upload → OCR extracts text<br/>
+                  • Then review and click "Use This Data" → Form auto-fills!
+                </p>
+              </div>
+            </div>
+          </Card>
+        )}
+      </div>
+
       {/* TOP GRID */}
+      {activeImportTab === 'manual' && (
       <div style={{ display:"grid", gridTemplateColumns:"1.8fr 1fr", gap:24, marginBottom:28, alignItems:"start" }}>
 
         {/* ADD BILL FORM */}
@@ -501,6 +1058,7 @@ export default function AddBill() {
           )}
         </div>
       </div>
+      )}
 
       {/* BILLING HISTORY */}
       <Card C={C} className="ab-fu" style={{ animationDelay:".18s" }}>
