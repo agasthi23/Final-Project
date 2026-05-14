@@ -97,18 +97,26 @@ export const calculateBill = async (req, res) => {
     }
 
     const unitsNum = parseFloat(units);
-    let amount = tariff.fixedCharge || 0;
+    let amount = 0;
     let remaining = unitsNum;
     let prevMax = 0;
+    let applicableFixedCharge = tariff.fixedCharge || 0;
 
     for (const tier of tariff.tiers) {
       if (remaining <= 0) break;
       const tierMax = tier.upTo === null ? Infinity : tier.upTo;
-      const tierSize = Math.min(remaining, tierMax - prevMax + 1);
+      const tierSize = Math.min(remaining, tierMax - prevMax);
       amount += tierSize * (tier.ratePerUnit || 0);
       remaining -= tierSize;
       prevMax = tierMax === Infinity ? prevMax : tierMax;
+      if (tier.fixedCharge) applicableFixedCharge = tier.fixedCharge;
     }
+
+    amount += applicableFixedCharge;
+
+    // SSC for electricity, VAT for water
+    if (type === "electricity") amount = amount * 1.025;
+    if (type === "water") amount = amount * 1.18;
 
     res.json({
       success: true,
