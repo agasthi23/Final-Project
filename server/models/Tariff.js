@@ -4,6 +4,7 @@ import mongoose from "mongoose";
 const tierSchema = new mongoose.Schema({
   upTo:        { type: Number, default: null },
   ratePerUnit: { type: Number, required: true },
+  fixedCharge: { type: Number, default: 0 },
 }, { _id: false });
 
 const tariffSchema = new mongoose.Schema(
