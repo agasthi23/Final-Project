@@ -5,6 +5,8 @@ import {
   loginUser,
   getSalary,
   updateSalary,
+  getBudgetMode,
+  updateBudgetMode,
   getProfile,
   updateProfile,
   changePassword,
@@ -30,6 +32,8 @@ router.put("/profile", updateProfile);
 router.put("/password", changePassword);
 router.get("/preferences", getPreferences);
 router.put("/preferences", updatePreferences);
+router.get("/budget-mode", getBudgetMode);
+router.put("/budget-mode", updateBudgetMode);
 router.put("/profile-picture", updateProfilePicture);
 router.delete("/profile-picture", deleteProfilePicture);
 router.get("/salary", getSalary);
