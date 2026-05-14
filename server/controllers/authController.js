@@ -244,6 +244,61 @@ export const updateSalary = async (req, res) => {
   }
 };
 
+// GET BUDGET MODE
+export const getBudgetMode = async (req, res) => {
+  try {
+    const user = await User.findById(req.user.id).select("budgetMode fixedBudget");
+    res.json({
+      success: true,
+      budgetMode: user?.budgetMode || "salary",
+      fixedBudget: user?.fixedBudget || 0,
+    });
+  } catch (error) {
+    console.error("Get budget mode error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
+// UPDATE BUDGET MODE
+export const updateBudgetMode = async (req, res) => {
+  try {
+    const { budgetMode, fixedBudget } = req.body;
+    if (!budgetMode || !["salary", "fixed"].includes(budgetMode)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid budget mode is required",
+      });
+    }
+
+    if (fixedBudget !== undefined && fixedBudget < 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Fixed budget must be a non-negative number",
+      });
+    }
+
+    const updateData = { budgetMode };
+    if (fixedBudget !== undefined) {
+      updateData.fixedBudget = Math.round(fixedBudget);
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      updateData,
+      { new: true }
+    ).select("budgetMode fixedBudget");
+
+    res.json({
+      success: true,
+      budgetMode: user.budgetMode,
+      fixedBudget: user.fixedBudget,
+    });
+  } catch (error) {
+    console.error("Update budget mode error:", error);
+    res.status(500).json({ success: false, message: "Server error" });
+  }
+};
+
 // UPDATE PROFILE PICTURE
 export const updateProfilePicture = async (req, res) => {
   try {
