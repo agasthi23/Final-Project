@@ -62,6 +62,10 @@ export const authAPI = {
     api.get("/auth/salary"),
   updateSalary: (salary) =>
     api.put("/auth/salary", { salary }),
+  getBudgetMode: () =>
+    api.get("/auth/budget-mode"),
+  updateBudgetMode: (data) =>
+    api.put("/auth/budget-mode", data),
   
   // Profile endpoints (NEW)
   getProfile: () =>
