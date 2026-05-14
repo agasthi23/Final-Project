@@ -61,6 +61,11 @@ const getNextMonth = (currentMonth) => {
   }
 };
 
+const getCurrentMonthLabel = () => {
+  const now = new Date();
+  return `${months[now.getMonth()]} ${now.getFullYear()}`;
+};
+
 // ─── Average helpers ──────────────────────────────────────────────────────────
 const calculateAverage = (bills) => {
   if (!bills?.length) return { units: 0, amount: 0 };
@@ -97,8 +102,8 @@ const calculateWeightedAverage = (bills) => {
   return { units: Math.round(unitsSum), amount: Math.round(amountSum) };
 };
 
-// ─── Core prediction helper (NO email logic) ──────────────────────────────────
-const getPredictionForUtility = async (utility, bills) => {
+// ─── Core prediction helper - UPDATED to accept householdFeatures ──────────────
+const getPredictionForUtility = async (utility, bills, householdFeatures = null) => {
   if (bills.length < 3) {
     const avg = calculateAverage(bills);
     return {
@@ -121,8 +126,8 @@ const getPredictionForUtility = async (utility, bills) => {
   }));
 
   try {
-    // ✅ No email args passed — prediction fetching never triggers emails
-    const mlResult = await predictBill(utility, formattedBills, "simple");
+    // ✅ PASS householdFeatures to predictBill
+    const mlResult = await predictBill(utility, formattedBills, "simple", householdFeatures);
     if (mlResult.success) {
       return {
         predictedAmount:  Math.round(mlResult.predictedAmount),
@@ -172,8 +177,10 @@ export const getNextMonthPrediction = async (req, res) => {
     }
 
     const formattedBills = bills.map(b => ({
-      billingMonth: b.billingMonth, utilityType: b.utilityType,
-      unitsUsed: b.unitsUsed || 0, billAmount: b.billAmount
+      billingMonth: b.billingMonth,
+      utilityType: b.utilityType,
+      unitsUsed: b.unitsUsed || 0,
+      billAmount: b.billAmount
     }));
 
     const mlResult = await predictBill(utility, formattedBills, method);
@@ -198,7 +205,7 @@ export const getNextMonthPrediction = async (req, res) => {
           ? `ML prediction based on ${bills.length} months of data using ${method} method.`
           : `Fallback calculation based on average of ${bills.length} months.`,
         method:     mlResult.success ? `ML - ${method}` : "Simple Average (Fallback)",
-        nextMonth:  getNextMonth(lastBill.billingMonth),
+        nextMonth:  getCurrentMonthLabel(),
         dataPoints: bills.length,
         mlUsed:     mlResult.success
       }
@@ -291,7 +298,7 @@ export const getPredictionSummary = async (req, res) => {
         electricity: { predicted: Math.round(elecPred),  current: elecBills[0]?.billAmount  || 0 },
         water:       { predicted: Math.round(waterPred), current: waterBills[0]?.billAmount || 0 },
         total:     Math.round(elecPred + waterPred),
-        nextMonth: getNextMonth(elecBills[0]?.billingMonth)
+        nextMonth: getCurrentMonthLabel()
       }
     });
   } catch (error) {
@@ -301,20 +308,24 @@ export const getPredictionSummary = async (req, res) => {
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 4. POST /api/predictions/batch
+// 4. POST /api/predictions/batch - UPDATED with household features
 // ──────────────────────────────────────────────────────────────────────────────
 export const getBatchPredictions = async (req, res) => {
   try {
     const userId = req.user.id;
     const { utilities } = req.body;
 
+    // ✅ FETCH USER WITH HOUSEHOLD FEATURES
+    const user = await User.findById(userId).select("householdFeatures");
+    const householdFeatures = user?.householdFeatures || {};
+
     const results = {};
     for (const utility of utilities) {
       const bills = await Bill.find({ user: userId, utilityType: utility })
         .sort({ billingMonth: 1 });
 
-      // ✅ No email logic here — use shared helper
-      results[utility.toLowerCase()] = await getPredictionForUtility(utility, bills);
+      // ✅ PASS householdFeatures to getPredictionForUtility
+      results[utility.toLowerCase()] = await getPredictionForUtility(utility, bills, householdFeatures);
     }
 
     res.json(results);
@@ -325,7 +336,7 @@ export const getBatchPredictions = async (req, res) => {
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
-// 5. GET /api/predictions/current
+// 5. GET /api/predictions/current - UPDATED with household features
 // Used by Dashboard and Budget page — NO anomaly emails here
 // ──────────────────────────────────────────────────────────────────────────────
 export const getCurrentPredictions = async (req, res) => {
@@ -333,22 +344,30 @@ export const getCurrentPredictions = async (req, res) => {
     const userId = req.user.id;
     const now = new Date();
 
-    const elecBills  = await Bill.find({ user: userId, utilityType: "Electricity" }).sort({ billingMonth: 1 });
-    const waterBills = await Bill.find({ user: userId, utilityType: "Water"       }).sort({ billingMonth: 1 });
+    // ✅ FETCH USER WITH HOUSEHOLD FEATURES
+    const user = await User.findById(userId).select("householdFeatures");
 
-    // ✅ getPredictionForUtility has NO email logic
-    const electricity = await getPredictionForUtility("Electricity", elecBills);
-    const water       = await getPredictionForUtility("Water",       waterBills);
+// ADD THIS TEMPORARILY
+console.log("🔍 RAW householdFeatures from DB:", JSON.stringify(user?.householdFeatures, null, 2));
 
-    const total     = (electricity.predictedAmount || 0) + (water.predictedAmount || 0);
+const householdFeatures = user?.householdFeatures || {};
+
+    const elecBills = await Bill.find({ user: userId, utilityType: "Electricity" }).sort({ billingMonth: 1 });
+    const waterBills = await Bill.find({ user: userId, utilityType: "Water" }).sort({ billingMonth: 1 });
+
+    // ✅ PASS householdFeatures to getPredictionForUtility
+    const electricity = await getPredictionForUtility("Electricity", elecBills, householdFeatures);
+    const water = await getPredictionForUtility("Water", waterBills, householdFeatures);
+
+    const total = (electricity.predictedAmount || 0) + (water.predictedAmount || 0);
     const isUsingML = electricity.method.includes("ML") || water.method.includes("ML");
     const hasAnomaly = electricity.isAnomaly || water.isAnomaly;
 
     res.json({
       electricity,
       water,
-      month:     now.toLocaleString("en-US", { month: "long" }),
-      year:      now.getFullYear(),
+      month: now.toLocaleString("en-US", { month: "long" }),
+      year: now.getFullYear(),
       total,
       isUsingML,
       hasAnomaly
@@ -367,8 +386,8 @@ export const getForecastPredictions = async (req, res) => {
     const userId = req.user.id;
     const nextMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
 
-    const elecBills  = await Bill.find({ user: userId, utilityType: "Electricity" }).sort({ billingMonth: 1 });
-    const waterBills = await Bill.find({ user: userId, utilityType: "Water"       }).sort({ billingMonth: 1 });
+    const elecBills = await Bill.find({ user: userId, utilityType: "Electricity" }).sort({ billingMonth: 1 });
+    const waterBills = await Bill.find({ user: userId, utilityType: "Water" }).sort({ billingMonth: 1 });
 
     const getForecast = async (utility, bills) => {
       if (bills.length < 3) return Math.round(calculateAverage(bills).amount * 1.05);
@@ -384,13 +403,13 @@ export const getForecastPredictions = async (req, res) => {
     };
 
     const electricity = await getForecast("Electricity", elecBills);
-    const water       = await getForecast("Water",       waterBills);
+    const water = await getForecast("Water", waterBills);
 
     res.json({
       electricity: { predictedAmount: electricity, confidence: "Medium", method: "5% Projection + ML/Weighted Average" },
-      water:       { predictedAmount: water,        confidence: "Medium", method: "5% Projection + ML/Weighted Average" },
+      water: { predictedAmount: water, confidence: "Medium", method: "5% Projection + ML/Weighted Average" },
       month: nextMonth.toLocaleString("en-US", { month: "long" }),
-      year:  nextMonth.getFullYear(),
+      year: nextMonth.getFullYear(),
       total: electricity + water
     });
   } catch (error) {
@@ -411,8 +430,11 @@ export const getSinglePrediction = async (req, res) => {
       return res.status(400).json({ success: false, message: "utilityType is required" });
     }
 
+    const user = await User.findById(userId).select("householdFeatures");
+    const householdFeatures = user?.householdFeatures || {};
+
     const bills = await Bill.find({ user: userId, utilityType }).sort({ billingMonth: 1 });
-    const result = await getPredictionForUtility(utilityType, bills);
+    const result = await getPredictionForUtility(utilityType, bills, householdFeatures);
     res.json(result);
   } catch (error) {
     console.error("ERROR in getSinglePrediction:", error);
@@ -464,4 +486,5 @@ export const checkAndAlertAnomaly = async (userId, utilityType) => {
     // Don't let anomaly checking break the bill-add flow
     console.error("checkAndAlertAnomaly error:", err.message);
   }
+  
 };
