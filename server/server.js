@@ -48,7 +48,8 @@ app.use("/api/users", userRoutes);
 import scheduler from './services/scheduler.js';
 scheduler.start();
 
-
+import uploadRoutes from './routes/uploadRoutes.js';
+app.use('/api/upload', uploadRoutes);
 
 // Connect to MongoDB
 mongoose.connect(process.env.MONGO_URI)
