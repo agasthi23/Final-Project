@@ -15,27 +15,35 @@ router.use(protect);
  */
 router.put("/household-features", async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
-    
-    if (!user) {
+    const { electricity, water } = req.body;
+
+    const updatedUser = await User.findByIdAndUpdate(
+      req.user.id,
+      {
+        $set: {
+          "householdFeatures.electricity": electricity,
+          "householdFeatures.water": water,
+        }
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedUser) {
       return res.status(404).json({ error: "User not found" });
     }
 
-    // Update household features with the provided data
-    user.householdFeatures = req.body;
-    await user.save();
+    console.log("✅ Saved householdFeatures:", JSON.stringify(updatedUser.householdFeatures, null, 2));
 
     res.json({ 
       success: true, 
       message: "Household features saved successfully", 
-      data: user.householdFeatures 
+      data: updatedUser.householdFeatures 
     });
   } catch (error) {
     console.error("Error saving household features:", error);
     res.status(500).json({ error: error.message });
   }
 });
-
 /**
  * @route GET /api/users/household-features
  * @desc Get household features for the authenticated user
