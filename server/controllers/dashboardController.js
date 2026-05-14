@@ -49,8 +49,10 @@ export const getDashboardSummary = async (req, res) => {
   try {
     const userId = req.user.id;
     
-    // Get user info
-    const user = await User.findById(userId).select("name salary");
+    // ✅ Get user info INCLUDING householdFeatures
+    const user = await User.findById(userId).select("name salary budgetMode fixedBudget householdFeatures");
+    const householdFeatures = user?.householdFeatures || {};
+    console.log("🏠 Dashboard HF:", JSON.stringify(householdFeatures, null, 2));
     
     // Get all bills
     const allBills = await Bill.find({ user: userId }).sort({ billingMonth: 1 });
@@ -61,21 +63,33 @@ export const getDashboardSummary = async (req, res) => {
     const nextMonthKey = getNextMonthKey(currentMonthKey);
     
     const currentMonthName = getMonthName(currentMonthKey);
-    const previousMonthName = getMonthName(previousMonthKey);
+    let previousMonthName = getMonthName(previousMonthKey);
     const nextMonthName = getMonthName(nextMonthKey);
     
-    // ── PREVIOUS MONTH BILLS (Actual data) ──
-    const previousBills = allBills.filter(b => b.billingMonth === previousMonthKey);
-    const previousWater = previousBills.find(b => b.utilityType === "Water")?.billAmount || 0;
-    const previousElec = previousBills.find(b => b.utilityType === "Electricity")?.billAmount || 0;
-    const previousWaterUnits = previousBills.find(b => b.utilityType === "Water")?.unitsUsed || 0;
-    const previousElecUnits = previousBills.find(b => b.utilityType === "Electricity")?.unitsUsed || 0;
-    const previousTotal = previousWater + previousElec;
+    // ── PREVIOUS MONTH BILLS (Water, Electricity, Internet) ──
+    const lastWaterBill = [...allBills].reverse().find(b => b.utilityType === "Water");
+    const lastElecBill = [...allBills].reverse().find(b => b.utilityType === "Electricity");
+    const lastInternetBill = [...allBills].reverse().find(b => b.utilityType === "Internet");
+    const latestBill = [...allBills].reverse()[0];
+    const actualPreviousMonthKey = latestBill?.billingMonth || previousMonthKey;
+    previousMonthName = getMonthName(actualPreviousMonthKey);
+
+    const previousWater      = lastWaterBill?.billAmount  || 0;
+    const previousElec       = lastElecBill?.billAmount   || 0;
+    const previousInternet   = lastInternetBill?.billAmount || 0;
+    const previousWaterUnits = lastWaterBill?.unitsUsed   || 0;
+    const previousElecUnits  = lastElecBill?.unitsUsed    || 0;
+    const previousTotal      = previousWater + previousElec + previousInternet;
     
-    // ── BUDGET ──
-    const budget = user.salary ? Math.round(user.salary * 0.08) : 8000;
+    // ── BUDGET — calculate based on budget mode ──
+    const salaryAmount = user.salary || 0;
+    const budgetMode   = user.budgetMode || "salary";
+    const fixedBudgetValue = user.fixedBudget || 0;
+    const budget = budgetMode === "fixed"
+      ? fixedBudgetValue
+      : salaryAmount > 0 ? Math.round(salaryAmount * 0.08) : 0;
     
-    // ── ML PREDICTIONS for CURRENT MONTH ──
+    // ── ML PREDICTIONS for CURRENT MONTH (Water, Electricity, Internet) ──
     const waterBills = allBills.filter(b => b.utilityType === "Water").map(b => ({
       billingMonth: b.billingMonth,
       utilityType: b.utilityType,
@@ -90,13 +104,21 @@ export const getDashboardSummary = async (req, res) => {
       billAmount: b.billAmount
     }));
     
-    let predictedWater = 0, predictedElec = 0;
+    const internetBills = allBills.filter(b => b.utilityType === "Internet").map(b => ({
+      billingMonth: b.billingMonth,
+      utilityType: b.utilityType,
+      unitsUsed: b.unitsUsed || 0,
+      billAmount: b.billAmount
+    }));
+    
+    let predictedWater = 0, predictedElec = 0, predictedInternet = 0;
     let predictedWaterUnits = 0, predictedElecUnits = 0;
     let mlConfidence = "Low";
     
     try {
       if (waterBills.length >= 3) {
-        const waterResult = await predictBill("Water", waterBills, "simple");
+        // ✅ Pass householdFeatures
+        const waterResult = await predictBill("Water", waterBills, "simple", householdFeatures);
         if (waterResult.success) {
           predictedWater = waterResult.predictedAmount;
           predictedWaterUnits = waterResult.predictedUnits;
@@ -104,26 +126,36 @@ export const getDashboardSummary = async (req, res) => {
         }
       }
       if (elecBills.length >= 3) {
-        const elecResult = await predictBill("Electricity", elecBills, "simple");
+        // ✅ Pass householdFeatures
+        const elecResult = await predictBill("Electricity", elecBills, "simple", householdFeatures);
         if (elecResult.success) {
           predictedElec = elecResult.predictedAmount;
           predictedElecUnits = elecResult.predictedUnits;
           mlConfidence = elecResult.confidence;
         }
       }
+      if (internetBills.length >= 3) {
+        // ✅ Pass householdFeatures
+        const internetResult = await predictBill("Internet", internetBills, "simple", householdFeatures);
+        if (internetResult.success) {
+          predictedInternet = internetResult.predictedAmount;
+          mlConfidence = internetResult.confidence;
+        }
+      }
     } catch (mlError) {
       console.error("ML service error:", mlError.message);
     }
     
-    const predictedTotal = predictedWater + predictedElec;
+    const predictedTotal = predictedWater + predictedElec + predictedInternet;
     const budgetPct = budget > 0 ? Math.min(100, Math.round((predictedTotal / budget) * 100)) : 0;
     
     // ── PREDICTIONS for NEXT MONTH (simple projection) ──
     const nextMonthWater = Math.round(predictedWater * 1.05);
     const nextMonthElec = Math.round(predictedElec * 1.03);
+    const nextMonthInternet = Math.round(predictedInternet * 1.02);
     const nextMonthWaterUnits = Math.round(predictedWaterUnits * 1.05);
     const nextMonthElecUnits = Math.round(predictedElecUnits * 1.03);
-    const nextMonthTotal = nextMonthWater + nextMonthElec;
+    const nextMonthTotal = nextMonthWater + nextMonthElec + nextMonthInternet;
     
     // ── TREND DATA (last 6 months for charts) ──
     const trendData = [];
@@ -156,17 +188,20 @@ export const getDashboardSummary = async (req, res) => {
       elecBill: t.elecBill,
     }));
     
-    // ── BILL DISTRIBUTION ──
+    // ── BILL DISTRIBUTION (including Internet) ──
     const totalWater = allBills.filter(b => b.utilityType === "Water").reduce((s, b) => s + b.billAmount, 0);
     const totalElec = allBills.filter(b => b.utilityType === "Electricity").reduce((s, b) => s + b.billAmount, 0);
-    const totalAll = totalWater + totalElec;
+    const totalInternet = allBills.filter(b => b.utilityType === "Internet").reduce((s, b) => s + b.billAmount, 0);
+    const totalAll = totalWater + totalElec + totalInternet;
     const waterPercent = totalAll > 0 ? Math.round((totalWater / totalAll) * 100) : 35;
     const elecPercent = totalAll > 0 ? Math.round((totalElec / totalAll) * 100) : 65;
+    const internetPercent = totalAll > 0 ? Math.round((totalInternet / totalAll) * 100) : 0;
     
-    // ── ALERTS ──
+    // ── ALERTS (including Internet changes) ──
     const alerts = [];
     const waterChange = calculatePercentChange(predictedWater, previousWater);
     const elecChange = calculatePercentChange(predictedElec, previousElec);
+    const internetChange = calculatePercentChange(predictedInternet, previousInternet);
     
     if (waterChange > 10) {
       alerts.push({
@@ -190,6 +225,15 @@ export const getDashboardSummary = async (req, res) => {
         title: "Electricity Usage Increasing",
         body: `Predicted ${elecChange}% increase. Consider reducing usage.`,
         icon: "elec"
+      });
+    }
+    
+    if (internetChange > 10) {
+      alerts.push({
+        type: "warning",
+        title: "Internet Bill Changed",
+        body: `Your internet bill ${internetChange > 0 ? 'increased' : 'decreased'} by ${Math.abs(internetChange)}%.`,
+        icon: "internet"
       });
     }
     
@@ -220,14 +264,18 @@ export const getDashboardSummary = async (req, res) => {
       success: true,
       data: {
         user: { name: user.name },
+        salary: salaryAmount,
+        budgetMode: budgetMode,
+        fixedBudget: fixedBudgetValue,
         currentMonth: currentMonthName,
         previousMonth: previousMonthName,
-        nextMonth: nextMonthName,
+        nextMonthLabel: nextMonthName,
         previous: {
           water: previousWaterUnits,
           elec: previousElecUnits,
           waterBill: previousWater,
           elecBill: previousElec,
+          internetBill: previousInternet,
           total: previousTotal,
         },
         predictions: {
@@ -235,9 +283,11 @@ export const getDashboardSummary = async (req, res) => {
           elec: Math.round(predictedElecUnits),
           waterBill: Math.round(predictedWater),
           elecBill: Math.round(predictedElec),
+          internetBill: Math.round(predictedInternet),
           total: Math.round(predictedTotal),
           waterChange: waterChange,
           elecChange: elecChange,
+          internetChange: internetChange,
           totalChange: calculatePercentChange(predictedTotal, previousTotal),
           confidence: mlConfidence,
         },
@@ -246,6 +296,7 @@ export const getDashboardSummary = async (req, res) => {
           elec: nextMonthElecUnits,
           waterBill: nextMonthWater,
           elecBill: nextMonthElec,
+          internetBill: nextMonthInternet,
           total: nextMonthTotal,
         },
         budget: {
@@ -258,6 +309,7 @@ export const getDashboardSummary = async (req, res) => {
         distribution: {
           electricity: elecPercent,
           water: waterPercent,
+          internet: internetPercent,
         },
         alerts: alerts,
       }
@@ -311,7 +363,8 @@ export const getDashboardTrends = async (req, res) => {
 export const getDashboardAlerts = async (req, res) => {
   try {
     const userId = req.user.id;
-    const user = await User.findById(userId).select("salary");
+    const user = await User.findById(userId).select("salary householdFeatures");
+    const householdFeatures = user?.householdFeatures || {};
     const allBills = await Bill.find({ user: userId });
     
     const today = new Date();
@@ -338,11 +391,11 @@ export const getDashboardAlerts = async (req, res) => {
     let predictedTotal = 0;
     try {
       if (waterBills.length >= 3) {
-        const waterResult = await predictBill("Water", waterBills, "simple");
+        const waterResult = await predictBill("Water", waterBills, "simple", householdFeatures);
         if (waterResult.success) predictedTotal += waterResult.predictedAmount;
       }
       if (elecBills.length >= 3) {
-        const elecResult = await predictBill("Electricity", elecBills, "simple");
+        const elecResult = await predictBill("Electricity", elecBills, "simple", householdFeatures);
         if (elecResult.success) predictedTotal += elecResult.predictedAmount;
       }
     } catch (mlError) {
