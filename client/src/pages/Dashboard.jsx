@@ -8,7 +8,7 @@ import {
   ReferenceLine, ResponsiveContainer,
 } from "recharts";
 import {
-  FiDroplet, FiZap, FiDollarSign,
+  FiDroplet, FiZap, FiWifi, FiDollarSign,
   FiAlertTriangle, FiArrowUp, FiArrowDown,
   FiActivity, FiBarChart2, FiChevronRight, FiInfo,
 } from "react-icons/fi";
@@ -32,6 +32,7 @@ import { dashboardAPI } from "../services/api";
       .fu1 { animation-delay:.06s }  .fu2 { animation-delay:.12s }
       .fu3 { animation-delay:.18s }  .fu4 { animation-delay:.24s }
       .fu5 { animation-delay:.30s }  .fu6 { animation-delay:.36s }
+      .fu7 { animation-delay:.42s }
       .live{ animation: pulse 2.2s ease-in-out infinite }
       .db-hover:hover { transform:translateY(-3px)!important; box-shadow:0 8px 28px rgba(0,0,0,.10)!important; }
     `;
@@ -79,6 +80,9 @@ export default function Dashboard() {
     violet:"#7c3aed",
     violetL: darkMode ? "rgba(124,58,237,0.15)" : "#f5f3ff",
     violetM: darkMode ? "#4c1d95" : "#ddd6fe",
+    indigo: "#4f46e5",
+    indigoL: darkMode ? "rgba(79,70,229,0.15)" : "#eef2ff",
+    indigoM: darkMode ? "#312e81" : "#c7d2fe",
     s1:"0 1px 3px rgba(15,23,42,.06),0 1px 2px rgba(15,23,42,.04)",
     s2:"0 4px 16px rgba(15,23,42,.08),0 2px 4px rgba(15,23,42,.04)",
     s3:"0 12px 40px rgba(15,23,42,.10),0 4px 8px rgba(15,23,42,.04)",
@@ -105,6 +109,55 @@ export default function Dashboard() {
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
+
+  // Calculate budget limit based on budget mode
+  const budgetMode  = dashboardData?.budgetMode  || "salary";
+  const fixedBudget = dashboardData?.fixedBudget || 0;
+  const salaryAmt   = dashboardData?.salary      || 0;
+  const budgetLimit = budgetMode === "fixed"
+    ? fixedBudget
+    : salaryAmt > 0 ? Math.round(salaryAmt * 0.08) : 0;
+
+  // Extract values with internet support
+  const previousWaterBill = dashboardData?.previous?.waterBill || 0;
+  const previousElecBill = dashboardData?.previous?.elecBill || 0;
+  const previousInternetBill = dashboardData?.previous?.internetBill || 0;
+  const previousWaterUnits = dashboardData?.previous?.water || 0;
+  const previousElecUnits = dashboardData?.previous?.elec || 0;
+  const previousTotal = dashboardData?.previous?.total || 0;
+
+  const predictedWaterBill = dashboardData?.predictions?.waterBill || 0;
+  const predictedElecBill = dashboardData?.predictions?.elecBill || 0;
+  const predictedInternetBill = dashboardData?.predictions?.internetBill || 0;
+  const predictedWaterUnits = dashboardData?.predictions?.water || 0;
+  const predictedElecUnits = dashboardData?.predictions?.elec || 0;
+  const predictedTotal = dashboardData?.predictions?.total || 0;
+  const predictedWaterChange = dashboardData?.predictions?.waterChange || 0;
+  const predictedElecChange = dashboardData?.predictions?.elecChange || 0;
+  const predictedInternetChange = dashboardData?.predictions?.internetChange || 0;
+  const predictedTotalChange = dashboardData?.predictions?.totalChange || 0;
+
+  // Check if user has internet data
+  const hasInternet = previousInternetBill > 0 || predictedInternetBill > 0;
+
+  const nextMonthData = dashboardData?.nextMonth || {};
+  const nextWaterBill = nextMonthData.waterBill || 0;
+  const nextElecBill = nextMonthData.elecBill || 0;
+  const nextInternetBill = nextMonthData.internetBill || 0;
+  const nextWaterUnits = nextMonthData.water || 0;
+  const nextElecUnits = nextMonthData.elec || 0;
+  const nextTotal = nextMonthData.total || 0;
+
+  const previousMonthLabel = dashboardData?.previousMonth || "March 2026";
+  const currentMonthLabel = dashboardData?.currentMonth || "April 2026";
+  const nextMonthLabel = dashboardData?.nextMonthLabel || dashboardData?.nextMonthName || "May 2026";
+
+  // Pie chart data - conditionally include internet
+  const PIE = [
+    { name:"Electricity", value:dashboardData?.distribution?.electricity || 65, color:C.blue },
+    { name:"Water", value:dashboardData?.distribution?.water || 35, color:C.teal },
+    ...(hasInternet ? [{ name:"Internet", value:dashboardData?.distribution?.internet || 0, color:C.indigo }] : []),
+  ];
 
   const Badge = ({ val }) => {
     const up = val >= 0;
@@ -164,6 +217,55 @@ export default function Dashboard() {
 
   const ax = { fill:C.faint, fontSize:11, fontFamily:F };
 
+  const BudgetInfoModal = () => {
+    if (!showBudgetInfo) return null;
+    const percentUsed = budgetLimit > 0 ? Math.min(Math.round((predictedTotal / budgetLimit) * 100), 100) : 0;
+    
+    return (
+      <div style={{
+        position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+        background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center",
+        justifyContent: "center", zIndex: 9999
+      }} onClick={() => setShowBudgetInfo(false)}>
+        <div style={{
+          background: C.card, borderRadius: 20, padding: "24px",
+          maxWidth: 320, width: "90%"
+        }} onClick={(e) => e.stopPropagation()}>
+          <h3 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: 16 }}>📊 Understanding Your Budget</h3>
+          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+            <p style={{ fontSize: "0.8rem", marginBottom: 12 }}><strong>Calculation:</strong></p>
+            <ul style={{ fontSize: "0.75rem", paddingLeft: 20, marginBottom: 16 }}>
+              {budgetMode === "fixed" ? (
+                <>
+                  <li>Fixed budget limit: <strong>Rs. {budgetLimit.toLocaleString()}</strong></li>
+                  <li>Predicted bill: <strong>Rs. {predictedTotal.toLocaleString()}</strong></li>
+                  <li>{predictedTotal.toLocaleString()} ÷ {budgetLimit.toLocaleString()} × 100 = <strong>{percentUsed}%</strong></li>
+                </>
+              ) : (
+                <>
+                  <li>Monthly salary: <strong>Rs. {salaryAmt.toLocaleString()}</strong></li>
+                  <li>8% utility budget: <strong>Rs. {budgetLimit.toLocaleString()}</strong></li>
+                  <li>Predicted bill: <strong>Rs. {predictedTotal.toLocaleString()}</strong></li>
+                  <li>{predictedTotal.toLocaleString()} ÷ {budgetLimit.toLocaleString()} × 100 = <strong>{percentUsed}%</strong></li>
+                </>
+              )}
+            </ul>
+            <div style={{ background: C.blueL, borderRadius: 8, padding: "10px", textAlign: "center" }}>
+              <span style={{ fontSize: "0.7rem", color: C.blue }}>
+                ✅ {percentUsed}% of your {budgetMode === "fixed" ? "fixed" : "8%"} utility budget
+              </span>
+            </div>
+          </div>
+          <button onClick={() => setShowBudgetInfo(false)} style={{
+            width: "100%", marginTop: 16, padding: "10px",
+            background: C.blue, border: "none", borderRadius: 10,
+            color: "#fff", fontWeight: 600, cursor: "pointer"
+          }}>Got it</button>
+        </div>
+      </div>
+    );
+  };
+
   if (loading) {
     return (
       <div style={{ minHeight:"100vh", background:C.page, fontFamily:F, color:C.ink, padding:"28px 32px" }}>
@@ -188,81 +290,7 @@ export default function Dashboard() {
     );
   }
 
-  const { data } = { data: dashboardData };
   const displayName = authUser?.name || "User";
-
-  // Safely extract values
-  const previousWaterBill = data.previous?.waterBill || 0;
-  const previousElecBill = data.previous?.elecBill || 0;
-  const previousWaterUnits = data.previous?.water || 0;
-  const previousElecUnits = data.previous?.elec || 0;
-  const previousTotal = data.previous?.total || 0;
-
-  const predictedWaterBill = data.predictions?.waterBill || 0;
-  const predictedElecBill = data.predictions?.elecBill || 0;
-  const predictedWaterUnits = data.predictions?.water || 0;
-  const predictedElecUnits = data.predictions?.elec || 0;
-  const predictedTotal = data.predictions?.total || 0;
-  const predictedWaterChange = data.predictions?.waterChange || 0;
-  const predictedElecChange = data.predictions?.elecChange || 0;
-  const predictedTotalChange = data.predictions?.totalChange || 0;
-
-  // nextMonth object (numeric data)
-  const nextMonthData = data.nextMonth || {};
-  const nextWaterBill = nextMonthData.waterBill || 0;
-  const nextElecBill = nextMonthData.elecBill || 0;
-  const nextWaterUnits = nextMonthData.water || 0;
-  const nextElecUnits = nextMonthData.elec || 0;
-  const nextTotal = nextMonthData.total || 0;
-
-  // String labels for month names — separate from the nextMonth data object
-  const previousMonthLabel = data.previousMonth || "March 2026";
-  const currentMonthLabel = data.currentMonth || "April 2026";
-  const nextMonthLabel = data.nextMonthLabel || data.nextMonthName || "May 2026";
-
-  const PIE = [
-    { name:"Electricity", value:data.distribution?.electricity || 65, color:C.blue },
-    { name:"Water", value:data.distribution?.water || 35, color:C.teal },
-  ];
-
-  const BudgetInfoModal = () => {
-    if (!showBudgetInfo) return null;
-    const salary = data?.salary || 100000;
-    const budgetAmount = salary * 0.08;
-    const percentUsed = Math.min(Math.round((predictedTotal / budgetAmount) * 100), 100);
-    
-    return (
-      <div style={{
-        position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
-        background: "rgba(0,0,0,0.7)", display: "flex", alignItems: "center",
-        justifyContent: "center", zIndex: 9999
-      }} onClick={() => setShowBudgetInfo(false)}>
-        <div style={{
-          background: C.card, borderRadius: 20, padding: "24px",
-          maxWidth: 320, width: "90%"
-        }} onClick={(e) => e.stopPropagation()}>
-          <h3 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: 16 }}>📊 Understanding Your Budget</h3>
-          <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
-            <p style={{ fontSize: "0.8rem", marginBottom: 12 }}><strong>Calculation:</strong></p>
-            <ul style={{ fontSize: "0.75rem", paddingLeft: 20, marginBottom: 16 }}>
-              <li>Salary: <strong>Rs. {salary.toLocaleString()}</strong></li>
-              <li>8% budget: <strong>Rs. {budgetAmount.toLocaleString()}</strong></li>
-              <li>Predicted bill: <strong>Rs. {predictedTotal.toLocaleString()}</strong></li>
-              <li>{predictedTotal.toLocaleString()} ÷ {budgetAmount.toLocaleString()} × 100 = <strong>{percentUsed}%</strong></li>
-            </ul>
-            <div style={{ background: C.blueL, borderRadius: 8, padding: "10px", textAlign: "center" }}>
-              <span style={{ fontSize: "0.7rem", color: C.blue }}>✅ {percentUsed}% of your 8% utility budget</span>
-            </div>
-          </div>
-          <button onClick={() => setShowBudgetInfo(false)} style={{
-            width: "100%", marginTop: 16, padding: "10px",
-            background: C.blue, border: "none", borderRadius: 10,
-            color: "#fff", fontWeight: 600, cursor: "pointer"
-          }}>Got it</button>
-        </div>
-      </div>
-    );
-  };
 
   return (
     <div style={{ minHeight:"100vh", background:C.page, fontFamily:F, color:C.ink, padding:"0 0 64px" }}>
@@ -300,60 +328,75 @@ export default function Dashboard() {
                 <Badge val={predictedTotalChange}/>
               </div>
               <p style={{ fontSize:"0.78rem", color:"rgba(255,255,255,.6)", margin:0 }}>
-                Estimated {currentMonthLabel} bill · Budget: Rs. {data.budget?.amount?.toLocaleString() || 0}
+                Estimated {currentMonthLabel} bill · Budget: Rs. {budgetLimit > 0 ? budgetLimit.toLocaleString() : "Not set"}
               </p>
             </div>
 
-            <div style={{ background:"rgba(255,255,255,.12)", backdropFilter:"blur(12px)",
-              border:"1px solid rgba(255,255,255,.18)", borderRadius:16, padding:"18px 22px",
-              minWidth:200, flexShrink:0 }}>
-              
-              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
-                <p style={{ fontSize:"0.68rem", fontWeight:700, color:"rgba(255,255,255,.65)",
-                  textTransform:"uppercase", letterSpacing:"0.1em", margin:0 }}>
-                  Budget Used (vs 8% of salary)
+            {budgetLimit > 0 ? (
+              <div style={{ background:"rgba(255,255,255,.12)", backdropFilter:"blur(12px)",
+                border:"1px solid rgba(255,255,255,.18)", borderRadius:16, padding:"18px 22px",
+                minWidth:200, flexShrink:0 }}>
+                
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10 }}>
+                  <p style={{ fontSize:"0.68rem", fontWeight:700, color:"rgba(255,255,255,.65)",
+                    textTransform:"uppercase", letterSpacing:"0.1em", margin:0 }}>
+                    {budgetMode === "fixed"
+                      ? `Budget Used (vs Rs. ${budgetLimit.toLocaleString()} limit)`
+                      : "Budget Used (vs 8% of salary)"}
+                  </p>
+                  <FiInfo 
+                    size={12} 
+                    color="rgba(255,255,255,.7)" 
+                    style={{ cursor: "pointer" }}
+                    onClick={() => setShowBudgetInfo(true)}
+                  />
+                </div>
+                
+                <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                  <div style={{ position:"relative", width:56, height:56, flexShrink:0 }}>
+                    <svg viewBox="0 0 56 56" style={{ transform:"rotate(-90deg)", width:56, height:56 }}>
+                      <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(255,255,255,.15)" strokeWidth="6"/>
+                      <circle cx="28" cy="28" r="22" fill="none"
+                        stroke={(() => {
+                          const percent = budgetLimit > 0 ? Math.min(Math.round((predictedTotal / budgetLimit) * 100), 100) : 0;
+                          return percent > 90 ? "#fbbf24" : "#4ade80";
+                        })()} 
+                        strokeWidth="6"
+                        strokeDasharray={`${2 * Math.PI * 22 * (budgetLimit > 0 ? Math.min(Math.round((predictedTotal / budgetLimit) * 100), 100) : 0) / 100} 999`}
+                        strokeLinecap="round"/>
+                    </svg>
+                    <span style={{ position:"absolute", inset:0, display:"flex", alignItems:"center",
+                      justifyContent:"center", fontSize:"0.75rem", fontWeight:800, color:"#fff" }}>
+                      {budgetLimit > 0 ? Math.min(Math.round((predictedTotal / budgetLimit) * 100), 100) : 0}%
+                    </span>
+                  </div>
+                  <div>
+                    <p style={{ fontSize:"1rem", fontWeight:800, color:"#fff", margin:"0 0 2px" }}>
+                      Rs. {predictedTotal.toLocaleString()}
+                    </p>
+                    <p style={{ fontSize:"0.72rem", color:"rgba(255,255,255,.6)", margin:0 }}>
+                      of Rs. {budgetLimit.toLocaleString()}
+                    </p>
+                    <p style={{ fontSize:"0.7rem", color: (budgetLimit > 0 ? Math.min(Math.round((predictedTotal / budgetLimit) * 100), 100) : 0) > 90 ? "#fbbf24" : "#4ade80",
+                      margin:"4px 0 0", fontWeight:600 }}>
+                      {(budgetLimit > 0 ? Math.min(Math.round((predictedTotal / budgetLimit) * 100), 100) : 0) >= 100 ? "⚠ Over budget" : 
+                       (budgetLimit > 0 ? Math.min(Math.round((predictedTotal / budgetLimit) * 100), 100) : 0) >= 85 ? "⚡ Approaching limit" : "✓ Within budget"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={{ background:"rgba(255,255,255,.12)", backdropFilter:"blur(12px)",
+                border:"1px solid rgba(255,255,255,.18)", borderRadius:16, padding:"18px 22px",
+                minWidth:200, flexShrink:0, textAlign:"center" }}>
+                <p style={{ fontSize:"0.8rem", color:"rgba(255,255,255,.7)", margin:"0 0 10px" }}>
+                  💰 Budget not set up yet
                 </p>
-                <FiInfo 
-                  size={12} 
-                  color="rgba(255,255,255,.7)" 
-                  style={{ cursor: "pointer" }}
-                  onClick={() => setShowBudgetInfo(true)}
-                />
+                <p style={{ fontSize:"0.72rem", color:"rgba(255,255,255,.5)", margin:0 }}>
+                  Visit the Budget page to set your spending limit
+                </p>
               </div>
-              
-              <div style={{ display:"flex", alignItems:"center", gap:14 }}>
-                <div style={{ position:"relative", width:56, height:56, flexShrink:0 }}>
-                  <svg viewBox="0 0 56 56" style={{ transform:"rotate(-90deg)", width:56, height:56 }}>
-                    <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(255,255,255,.15)" strokeWidth="6"/>
-                    <circle cx="28" cy="28" r="22" fill="none"
-                      stroke={(() => {
-                        const percent = Math.min(((predictedTotal / ((data.salary || 100000) * 0.08)) * 100), 100);
-                        return percent > 90 ? "#fbbf24" : "#4ade80";
-                      })()} 
-                      strokeWidth="6"
-                      strokeDasharray={`${2 * Math.PI * 22 * Math.min(((predictedTotal / ((data.salary || 100000) * 0.08)) * 100), 100) / 100} 999`}
-                      strokeLinecap="round"/>
-                  </svg>
-                  <span style={{ position:"absolute", inset:0, display:"flex", alignItems:"center",
-                    justifyContent:"center", fontSize:"0.75rem", fontWeight:800, color:"#fff" }}>
-                    {Math.min(Math.round((predictedTotal / ((data.salary || 100000) * 0.08)) * 100), 100)}%
-                  </span>
-                </div>
-                <div>
-                  <p style={{ fontSize:"1rem", fontWeight:800, color:"#fff", margin:"0 0 2px" }}>
-                    Rs. {predictedTotal.toLocaleString()}
-                  </p>
-                  <p style={{ fontSize:"0.72rem", color:"rgba(255,255,255,.6)", margin:0 }}>
-                    of Rs. {((data.salary || 100000) * 0.08).toLocaleString()}
-                  </p>
-                  <p style={{ fontSize:"0.7rem", color: Math.min(((predictedTotal / ((data.salary || 100000) * 0.08)) * 100), 100) > 90 ? "#fbbf24" : "#4ade80",
-                    margin:"4px 0 0", fontWeight:600 }}>
-                    {Math.min(((predictedTotal / ((data.salary || 100000) * 0.08)) * 100), 100) >= 100 ? "⚠ Over budget" : 
-                     Math.min(((predictedTotal / ((data.salary || 100000) * 0.08)) * 100), 100) >= 85 ? "⚡ Approaching limit" : "✓ Within budget"}
-                  </p>
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         </div>
 
@@ -370,7 +413,11 @@ export default function Dashboard() {
               primary:`Rs. ${previousWaterBill.toLocaleString()}`, secondary:`${previousWaterUnits} Units used` },
             { icon:<FiZap size={17}/>, title:"Electricity Bill", accent:C.blue, bg:C.blueL, bdr:C.blueM, cls:"fu2",
               primary:`Rs. ${previousElecBill.toLocaleString()}`, secondary:`${previousElecUnits} kWh used` },
-            { icon:<FiDollarSign size={17}/>, title:"Total Bill", accent:C.violet, bg:C.violetL, bdr:C.violetM, cls:"fu3",
+            ...(hasInternet ? [{
+              icon:<FiWifi size={17}/>, title:"Internet Bill", accent:C.indigo, bg:C.indigoL, bdr:C.indigoM, cls:"fu3",
+              primary:`Rs. ${previousInternetBill.toLocaleString()}`, secondary:"Flat rate"
+            }] : []),
+            { icon:<FiDollarSign size={17}/>, title:"Total Bill", accent:C.violet, bg:C.violetL, bdr:C.violetM, cls:"fu4",
               primary:`Rs. ${previousTotal.toLocaleString()}`, secondary:`${previousMonthLabel} total` },
           ].map((s,i) => (
             <div key={i} className={`fu db-hover ${s.cls}`} style={{ background:C.card,
@@ -406,7 +453,11 @@ export default function Dashboard() {
               primary:`Rs. ${predictedWaterBill.toLocaleString()}`, secondary:`${predictedWaterUnits} Units predicted`, chg:predictedWaterChange },
             { icon:<FiZap size={17}/>, title:"Electricity Bill", accent:C.blue, bg:C.blueL, bdr:C.blueM, cls:"fu2",
               primary:`Rs. ${predictedElecBill.toLocaleString()}`, secondary:`${predictedElecUnits} kWh predicted`, chg:predictedElecChange },
-            { icon:<FiDollarSign size={17}/>, title:"Total Bill", accent:C.violet, bg:C.violetL, bdr:C.violetM, cls:"fu3",
+            ...(hasInternet ? [{
+              icon:<FiWifi size={17}/>, title:"Internet Bill", accent:C.indigo, bg:C.indigoL, bdr:C.indigoM, cls:"fu3",
+              primary:`Rs. ${predictedInternetBill.toLocaleString()}`, secondary:"Flat rate", chg:predictedInternetChange
+            }] : []),
+            { icon:<FiDollarSign size={17}/>, title:"Total Bill", accent:C.violet, bg:C.violetL, bdr:C.violetM, cls:"fu4",
               primary:`Rs. ${predictedTotal.toLocaleString()}`, secondary:`Estimated ${currentMonthLabel} total`, chg:predictedTotalChange },
           ].map((s,i) => (
             <div key={i} className={`fu db-hover ${s.cls}`} style={{ background:C.card,
@@ -418,7 +469,7 @@ export default function Dashboard() {
                   <div style={{ width:36, height:36, borderRadius:9, background:s.bg,
                     border:`1px solid ${s.bdr}`, display:"flex", alignItems:"center",
                     justifyContent:"center", color:s.accent }}>{s.icon}</div>
-                  <Badge val={s.chg}/>
+                  {s.chg !== undefined && <Badge val={s.chg}/>}
                 </div>
                 <p style={{ fontSize:"0.67rem", fontWeight:800, color:C.muted, letterSpacing:"0.1em",
                   textTransform:"uppercase", margin:"0 0 3px" }}>{s.title}</p>
@@ -438,11 +489,15 @@ export default function Dashboard() {
         </p>
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:14, marginBottom:32 }}>
           {[
-            { icon:<FiDroplet size={17}/>, title:"Water Bill", accent:C.teal, bg:C.tealL, bdr:C.tealM, cls:"fu4",
+            { icon:<FiDroplet size={17}/>, title:"Water Bill", accent:C.teal, bg:C.tealL, bdr:C.tealM, cls:"fu5",
               primary:`Rs. ${nextWaterBill.toLocaleString()}`, secondary:`${nextWaterUnits} Units est.` },
-            { icon:<FiZap size={17}/>, title:"Electricity Bill", accent:C.blue, bg:C.blueL, bdr:C.blueM, cls:"fu5",
+            { icon:<FiZap size={17}/>, title:"Electricity Bill", accent:C.blue, bg:C.blueL, bdr:C.blueM, cls:"fu6",
               primary:`Rs. ${nextElecBill.toLocaleString()}`, secondary:`${nextElecUnits} kWh est.` },
-            { icon:<FiBarChart2 size={17}/>, title:"Total Forecast", accent:C.amber, bg:C.amberL, bdr:C.amberM, cls:"fu5",
+            ...(hasInternet ? [{
+              icon:<FiWifi size={17}/>, title:"Internet Bill", accent:C.indigo, bg:C.indigoL, bdr:C.indigoM, cls:"fu7",
+              primary:`Rs. ${nextInternetBill.toLocaleString()}`, secondary:"Flat rate est."
+            }] : []),
+            { icon:<FiBarChart2 size={17}/>, title:"Total Forecast", accent:C.amber, bg:C.amberL, bdr:C.amberM, cls:"fu7",
               primary:`Rs. ${nextTotal.toLocaleString()}`, secondary:`Projected ${nextMonthLabel} total` },
           ].map((s,i) => (
             <div key={i} className={`fu db-hover ${s.cls}`} style={{ background:C.card,
@@ -472,110 +527,117 @@ export default function Dashboard() {
         </div>
 
         {/* COMPARISON TABLE */}
-        <Label mb={12}>Monthly Comparison</Label>
-        <div className="fu fu3" style={{ marginBottom:32 }}>
-          <Card style={{ padding:0 }}>
-            <div style={{ padding:"18px 24px 16px", borderBottom:`1px solid ${C.border}`,
-              display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
-              <div>
-                <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 2px" }}>Bill Comparison</h3>
-                <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>
-                  Actual vs Predicted vs Forecast
-                </p>
-              </div>
-              <div style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 10px",
-                background:C.blueL, border:`1px solid ${C.blueM}`, borderRadius:8 }}>
-                <FiInfo size={12} color={C.blue}/>
-                <span style={{ fontSize:"0.7rem", fontWeight:600, color:C.blue }}>Confidence: {data.predictions?.confidence || "Medium"}</span>
-              </div>
-            </div>
-            <div style={{ overflowX:"auto" }}>
-              <table style={{ width:"100%", borderCollapse:"collapse", fontFamily:F }}>
-                <thead>
-                  <tr style={{ background:C.hover }}>
-                    <th style={{ padding:"10px 20px", textAlign:"left", fontSize:"0.67rem", fontWeight:800,
-                      color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}>Utility</th>
-                    <th style={{ padding:"10px 20px", textAlign:"right", fontSize:"0.67rem", fontWeight:800,
-                      color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}>{previousMonthLabel} (Actual)</th>
-                    <th style={{ padding:"10px 20px", textAlign:"center", fontSize:"0.67rem", fontWeight:800,
-                      color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}></th>
-                    <th style={{ padding:"10px 20px", textAlign:"right", fontSize:"0.67rem", fontWeight:800,
-                      color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}>{currentMonthLabel} (Predicted)</th>
-                    <th style={{ padding:"10px 20px", textAlign:"center", fontSize:"0.67rem", fontWeight:800,
-                      color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}></th>
-                    <th style={{ padding:"10px 20px", textAlign:"right", fontSize:"0.67rem", fontWeight:800,
-                      color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}>{nextMonthLabel} (Forecast)</th>
-                    <th style={{ padding:"10px 20px", textAlign:"right", fontSize:"0.67rem", fontWeight:800,
-                      color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}>Change</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    { icon:<FiDroplet size={15}/>, label:"Water", accent:C.teal, bg:C.tealL, bdr:C.tealM,
-                      actualUnits:`${previousWaterUnits} Units`, actualBill:`Rs. ${previousWaterBill.toLocaleString()}`,
-                      predUnits:`${predictedWaterUnits} Units`, predBill:`Rs. ${predictedWaterBill.toLocaleString()}`,
-                      forecastUnits:`${nextWaterUnits} Units`, forecastBill:`Rs. ${nextWaterBill.toLocaleString()}`,
-                      change:predictedWaterChange },
-                    { icon:<FiZap size={15}/>, label:"Electricity", accent:C.blue, bg:C.blueL, bdr:C.blueM,
-                      actualUnits:`${previousElecUnits} kWh`, actualBill:`Rs. ${previousElecBill.toLocaleString()}`,
-                      predUnits:`${predictedElecUnits} kWh`, predBill:`Rs. ${predictedElecBill.toLocaleString()}`,
-                      forecastUnits:`${nextElecUnits} kWh`, forecastBill:`Rs. ${nextElecBill.toLocaleString()}`,
-                      change:predictedElecChange },
-                  ].map((row, idx) => (
-                    <tr key={idx} style={{ borderBottom:`1px solid ${C.border}` }}>
-                      <td style={{ padding:"14px 20px" }}>
-                        <div style={{ display:"flex", alignItems:"center", gap:9 }}>
-                          <div style={{ width:32, height:32, borderRadius:8, background:row.bg,
-                            border:`1px solid ${row.bdr}`, display:"flex", alignItems:"center",
-                            justifyContent:"center", color:row.accent, flexShrink:0 }}>{row.icon}</div>
-                          <span style={{ fontSize:"0.85rem", fontWeight:700, color:C.ink }}>{row.label}</span>
-                        </div>
-                      </td>
-                      <td style={{ padding:"14px 20px", textAlign:"right" }}>
-                        <p style={{ fontSize:"0.85rem", fontWeight:700, color:C.ink, margin:"0 0 2px" }}>{row.actualBill}</p>
-                        <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{row.actualUnits}</p>
-                      </td>
-                      <td style={{ padding:"14px 10px", textAlign:"center" }}><FiChevronRight size={14} color={C.faint}/></td>
-                      <td style={{ padding:"14px 20px", textAlign:"right" }}>
-                        <p style={{ fontSize:"0.85rem", fontWeight:700, color:C.blue, margin:"0 0 2px" }}>{row.predBill}</p>
-                        <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{row.predUnits}</p>
-                      </td>
-                      <td style={{ padding:"14px 10px", textAlign:"center" }}><FiChevronRight size={14} color={C.faint}/></td>
-                      <td style={{ padding:"14px 20px", textAlign:"right" }}>
-                        <p style={{ fontSize:"0.85rem", fontWeight:700, color:C.violet, margin:"0 0 2px" }}>{row.forecastBill}</p>
-                        <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{row.forecastUnits}</p>
-                      </td>
-                      <td style={{ padding:"14px 20px", textAlign:"right" }}>
-                        <Badge val={row.change}/>
-                      </td>
-                    </tr>
-                  ))}
-                  <tr style={{
-                    background:"rgba(37, 99, 235, 0.08)",
-                    borderTop:`1px solid ${C.blue}30`,
-                    borderBottom:`1px solid ${C.blue}30`
-                  }}>
-                    <td style={{ padding:"16px 20px" }}>
-                      <span style={{ fontSize:"0.875rem", fontWeight:800, color:C.ink }}>Total</span>
-                    </td>
-                    <td style={{ padding:"16px 20px", textAlign:"right" }}>
-                      <span style={{ fontSize:"0.925rem", fontWeight:700, color:C.ink }}>Rs. {previousTotal.toLocaleString()}</span>
-                    </td>
-                    <td style={{ padding:"16px 10px", textAlign:"center" }}><FiChevronRight size={14} color={C.faint}/></td>
-                    <td style={{ padding:"16px 20px", textAlign:"right" }}>
-                      <span style={{ fontSize:"0.925rem", fontWeight:700, color:C.blue }}>Rs. {predictedTotal.toLocaleString()}</span>
-                    </td>
-                    <td style={{ padding:"16px 10px", textAlign:"center" }}><FiChevronRight size={14} color={C.faint}/></td>
-                    <td style={{ padding:"16px 20px", textAlign:"right" }}>
-                      <span style={{ fontSize:"0.925rem", fontWeight:700, color:C.violet }}>Rs. {nextTotal.toLocaleString()}</span>
-                    </td>
-                    <td style={{ padding:"16px 20px", textAlign:"right" }}><Badge val={predictedTotalChange}/></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </Card>
-        </div>
+<Label mb={12}>Monthly Comparison</Label>
+<div className="fu fu3" style={{ marginBottom:32 }}>
+  <Card style={{ padding:0 }}>
+    <div style={{ padding:"18px 24px 16px", borderBottom:`1px solid ${C.border}`,
+      display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
+      <div>
+        <h3 style={{ fontSize:"0.9rem", fontWeight:700, color:C.ink, margin:"0 0 2px" }}>Bill Comparison</h3>
+        <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>
+          Actual vs Predicted vs Forecast
+        </p>
+      </div>
+      <div style={{ display:"flex", alignItems:"center", gap:6, padding:"5px 10px",
+        background:C.blueL, border:`1px solid ${C.blueM}`, borderRadius:8 }}>
+        <FiInfo size={12} color={C.blue}/>
+        <span style={{ fontSize:"0.7rem", fontWeight:600, color:C.blue }}>Confidence: {dashboardData?.predictions?.confidence || "Medium"}</span>
+      </div>
+    </div>
+    <div style={{ overflowX:"auto" }}>
+      <table style={{ width:"100%", borderCollapse:"collapse", fontFamily:F }}>
+        <thead>
+          <tr style={{ background:C.hover }}>
+            <th style={{ padding:"10px 20px", textAlign:"left", fontSize:"0.67rem", fontWeight:800,
+              color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}>Utility</th>
+            <th style={{ padding:"10px 20px", textAlign:"right", fontSize:"0.67rem", fontWeight:800,
+              color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}>{previousMonthLabel} (Actual)</th>
+            <th style={{ padding:"10px 20px", textAlign:"center", fontSize:"0.67rem", fontWeight:800,
+              color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}></th>
+            <th style={{ padding:"10px 20px", textAlign:"right", fontSize:"0.67rem", fontWeight:800,
+              color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}>{currentMonthLabel} (Predicted)</th>
+            <th style={{ padding:"10px 20px", textAlign:"center", fontSize:"0.67rem", fontWeight:800,
+              color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}></th>
+            <th style={{ padding:"10px 20px", textAlign:"right", fontSize:"0.67rem", fontWeight:800,
+              color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}>{nextMonthLabel} (Forecast)</th>
+            <th style={{ padding:"10px 20px", textAlign:"right", fontSize:"0.67rem", fontWeight:800,
+              color:C.muted, textTransform:"uppercase", letterSpacing:"0.1em" }}>Change</th>
+          </tr>
+        </thead>
+        <tbody>
+          {[
+            { icon:<FiDroplet size={15}/>, label:"Water", accent:C.teal, bg:C.tealL, bdr:C.tealM,
+              actualUnits:`${previousWaterUnits} Units`, actualBill:`Rs. ${previousWaterBill.toLocaleString()}`,
+              predUnits:`${predictedWaterUnits} Units`, predBill:`Rs. ${predictedWaterBill.toLocaleString()}`,
+              forecastUnits:`${nextWaterUnits} Units`, forecastBill:`Rs. ${nextWaterBill.toLocaleString()}`,
+              change:predictedWaterChange },
+            { icon:<FiZap size={15}/>, label:"Electricity", accent:C.blue, bg:C.blueL, bdr:C.blueM,
+              actualUnits:`${previousElecUnits} kWh`, actualBill:`Rs. ${previousElecBill.toLocaleString()}`,
+              predUnits:`${predictedElecUnits} kWh`, predBill:`Rs. ${predictedElecBill.toLocaleString()}`,
+              forecastUnits:`${nextElecUnits} kWh`, forecastBill:`Rs. ${nextElecBill.toLocaleString()}`,
+              change:predictedElecChange },
+            ...(hasInternet ? [{
+              icon:<FiWifi size={15}/>, label:"Internet", accent:C.indigo, bg:C.indigoL, bdr:C.indigoM,
+              actualUnits:"Flat rate", actualBill:`Rs. ${previousInternetBill.toLocaleString()}`,
+              predUnits:"Flat rate", predBill:`Rs. ${predictedInternetBill.toLocaleString()}`,
+              forecastUnits:"Flat rate", forecastBill:`Rs. ${nextInternetBill.toLocaleString()}`,
+              change:predictedInternetChange
+            }] : []),
+          ].map((row, idx) => (
+            <tr key={idx} style={{ borderBottom:`1px solid ${C.border}` }}>
+              <td style={{ padding:"14px 20px" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:9 }}>
+                  <div style={{ width:32, height:32, borderRadius:8, background:row.bg,
+                    border:`1px solid ${row.bdr}`, display:"flex", alignItems:"center",
+                    justifyContent:"center", color:row.accent, flexShrink:0 }}>{row.icon}</div>
+                  <span style={{ fontSize:"0.85rem", fontWeight:700, color:C.ink }}>{row.label}</span>
+                </div>
+              </td>
+              <td style={{ padding:"14px 20px", textAlign:"right" }}>
+                <p style={{ fontSize:"0.85rem", fontWeight:700, color:C.ink, margin:"0 0 2px" }}>{row.actualBill}</p>
+                <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{row.actualUnits}</p>
+              </td>
+              <td style={{ padding:"14px 10px", textAlign:"center" }}><FiChevronRight size={14} color={C.faint}/></td>
+              <td style={{ padding:"14px 20px", textAlign:"right" }}>
+                <p style={{ fontSize:"0.85rem", fontWeight:700, color:C.blue, margin:"0 0 2px" }}>{row.predBill}</p>
+                <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{row.predUnits}</p>
+              </td>
+              <td style={{ padding:"14px 10px", textAlign:"center" }}><FiChevronRight size={14} color={C.faint}/></td>
+              <td style={{ padding:"14px 20px", textAlign:"right" }}>
+                <p style={{ fontSize:"0.85rem", fontWeight:700, color:C.violet, margin:"0 0 2px" }}>{row.forecastBill}</p>
+                <p style={{ fontSize:"0.72rem", color:C.muted, margin:0 }}>{row.forecastUnits}</p>
+              </td>
+              <td style={{ padding:"14px 20px", textAlign:"right" }}>
+                <Badge val={row.change}/>
+              </td>
+            </tr>
+          ))}
+          <tr style={{
+            background:"rgba(37, 99, 235, 0.08)",
+            borderTop:`1px solid ${C.blue}30`,
+            borderBottom:`1px solid ${C.blue}30`
+          }}>
+            <td style={{ padding:"16px 20px" }}>
+              <span style={{ fontSize:"0.875rem", fontWeight:800, color:C.ink }}>Total</span>
+            </td>
+            <td style={{ padding:"16px 20px", textAlign:"right" }}>
+              <span style={{ fontSize:"0.925rem", fontWeight:700, color:C.ink }}>Rs. {previousTotal.toLocaleString()}</span>
+            </td>
+            <td style={{ padding:"16px 10px", textAlign:"center" }}><FiChevronRight size={14} color={C.faint}/></td>
+            <td style={{ padding:"16px 20px", textAlign:"right" }}>
+              <span style={{ fontSize:"0.925rem", fontWeight:700, color:C.blue }}>Rs. {predictedTotal.toLocaleString()}</span>
+            </td>
+            <td style={{ padding:"16px 10px", textAlign:"center" }}><FiChevronRight size={14} color={C.faint}/></td>
+            <td style={{ padding:"16px 20px", textAlign:"right" }}>
+              <span style={{ fontSize:"0.925rem", fontWeight:700, color:C.violet }}>Rs. {nextTotal.toLocaleString()}</span>
+            </td>
+            <td style={{ padding:"16px 20px", textAlign:"right" }}><Badge val={predictedTotalChange}/></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </Card>
+</div>
 
         {/* ANALYTICS CHARTS */}
         <Label mb={12}>Analytics &amp; Trends</Label>
@@ -595,7 +657,7 @@ export default function Dashboard() {
               </div>
             }>
             <ResponsiveContainer width="100%" height={230}>
-              <AreaChart data={data.trends || []} margin={{ top:10, right:16, left:-10, bottom:0 }}>
+              <AreaChart data={dashboardData?.trends || []} margin={{ top:10, right:16, left:-10, bottom:0 }}>
                 <defs>
                   <linearGradient id="gW" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%"  stopColor={C.teal} stopOpacity={0.2}/>
@@ -625,14 +687,14 @@ export default function Dashboard() {
 
           <ChartCard title="Monthly Bill Trend" sub="Total billing cost over recent months (Rs.)">
             <ResponsiveContainer width="100%" height={230}>
-              <BarChart data={data.trends || []} margin={{ top:10, right:16, left:-10, bottom:0 }} barCategoryGap="35%">
+              <BarChart data={dashboardData?.trends || []} margin={{ top:10, right:16, left:-10, bottom:0 }} barCategoryGap="35%">
                 <CartesianGrid strokeDasharray="4 4" stroke={darkMode ? "#334155" : "#e8eaf0"} vertical={false}/>
                 <XAxis dataKey="m" tick={ax} axisLine={false} tickLine={false}/>
                 <YAxis tick={ax} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/1000).toFixed(0)}k`}/>
                 <Tooltip content={<Tip prefix="Rs."/>}/>
                 <ReferenceLine x="Dec*" stroke={C.blue} strokeDasharray="3 3"/>
                 <Bar dataKey="total" radius={[6,6,0,0]} name="Total Bill (Rs.)" fill={C.blue}>
-                  {(data.trends || []).map((d,i) => (
+                  {(dashboardData?.trends || []).map((d,i) => (
                     <Cell key={i} fill={d.m?.includes("*") ? C.blueL : C.blue}
                       stroke={d.m?.includes("*") ? C.blue : "none"} strokeWidth={d.m?.includes("*") ? 2 : 0}/>
                   ))}
@@ -689,7 +751,7 @@ export default function Dashboard() {
 
           <ChartCard title="Per-Utility Bill Comparison" sub="Water vs Electricity billing last 6 months (Rs.)">
             <ResponsiveContainer width="100%" height={230}>
-              <BarChart data={data.comparison || []} margin={{ top:10, right:16, left:-10, bottom:0 }} barCategoryGap="25%">
+              <BarChart data={dashboardData?.comparison || []} margin={{ top:10, right:16, left:-10, bottom:0 }} barCategoryGap="25%">
                 <CartesianGrid strokeDasharray="4 4" stroke={darkMode ? "#334155" : "#e8eaf0"} vertical={false}/>
                 <XAxis dataKey="m" tick={ax} axisLine={false} tickLine={false}/>
                 <YAxis tick={ax} axisLine={false} tickLine={false} tickFormatter={v=>`${(v/1000).toFixed(1)}k`}/>
@@ -707,10 +769,11 @@ export default function Dashboard() {
         <Label mb={12}>Alerts &amp; Recommendations</Label>
         <div className="fu fu6" style={{ display:"grid",
           gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))", gap:12, marginBottom:8 }}>
-          {(data.alerts || []).map((alert, i) => {
+          {(dashboardData?.alerts || []).map((alert, i) => {
             const getIcon = () => {
               if (alert.icon === "water") return <FiDroplet size={17}/>;
               if (alert.icon === "elec") return <FiZap size={17}/>;
+              if (alert.icon === "internet") return <FiWifi size={17}/>;
               return <FiActivity size={17}/>;
             };
             const getColors = () => {
