@@ -1,4 +1,5 @@
-⚡ Utility Bill Prediction and Management System
+Final Year Project - Utility Bill Prediction and Management System
+ 
 A web-based intelligent utility management platform designed for Sri Lankan households and small businesses. The system predicts future water and electricity bills using historical consumption data and localized tariff structures from the National Water Supply and Drainage Board (NWSDB) and the Ceylon Electricity Board (CEB).
 
 The platform combines utility bill forecasting, anomaly detection, budgeting, analytics visualization, and tariff-aware calculations into a single integrated dashboard.
