@@ -35,20 +35,16 @@ export const calculateTariffBill = (activeTariff, rawPredictedUnits, utility) =>
     if (remaining <= 0) break;
   }
 
-  let finalAmount;  // ← ONLY ONE declaration, at the top of the if-else block
+  let finalAmount;
 
   if (utility === "Electricity") {
-    // CEB uses FULL fixed charge (no proration for regular monthly bills)
     const fullFixed = applicableFixedCharge;
     const subtotal = amount + fullFixed;
-    // SSC Levy 2.5% on subtotal
     finalAmount = Math.round(subtotal * 1.025);
     console.log(`✅ Tariff calc: ${units} units | usage Rs.${amount} + fixed Rs.${fullFixed} (full month) = Rs.${subtotal} + SSC 2.5% → Rs.${finalAmount} (Electricity)`);
 
   } else if (utility === "Water") {
-    // Water service charge is NOT prorated — full charge applies
     const subtotal = amount + applicableFixedCharge;
-    // VAT 18% on (usage + service charge)
     finalAmount = Math.round(subtotal * 1.18);
     console.log(`✅ Tariff calc: ${units} units | usage Rs.${amount} + service Rs.${applicableFixedCharge} = Rs.${subtotal} + VAT 18% → Rs.${finalAmount} (Water)`);
 
@@ -161,6 +157,37 @@ export const predictBill = async (
       date: bill.billingDate
     }));
 
+    // ✅ INTERNET: Skip Python ML, use historical weighted average directly
+    if (utility === "Internet") {
+      let finalAmount = 0;
+      if (bills.length >= 3) {
+        const sorted = [...bills].sort((a, b) => (b.billingMonth || "").localeCompare(a.billingMonth || ""));
+        const w = [0.50, 0.30, 0.20];
+        finalAmount = Math.round(
+          sorted.slice(0, 3).reduce((sum, b, i) => sum + b.billAmount * w[i], 0)
+        );
+      } else if (bills.length > 0) {
+        finalAmount = Math.round(bills.reduce((s, b) => s + b.billAmount, 0) / bills.length);
+      }
+      console.log(`🌐 Internet: No tariff/units → historical amount Rs.${finalAmount}`);
+
+      return {
+        success: true,
+        predictedUnits: 0,
+        predictedAmount: finalAmount,
+        tariffUsed: false,
+        confidence: bills.length >= 6 ? "Medium" : "Low",
+        method: bills.length >= 3 ? "Weighted Average" : "Simple Average",
+        mape: null,
+        dataQuality: bills.length >= 6 ? "Good" : "Limited",
+        isAnomaly: false,
+        anomalyMessage: null,
+        anomalyPercent: 0,
+        anomalySeverity: "normal",
+        message: `Predicted Rs.${finalAmount} based on ${bills.length} months of internet bill history`
+      };
+    }
+
     // Call Python ML service to get UNIT prediction
     const response = await axios.post(`${ML_SERVICE_URL}/predict`, {
       utility_type: utility,
@@ -172,13 +199,12 @@ export const predictBill = async (
 
     const mlData = response.data;
 
-    // ✅ USE Python's unit prediction (ONE source of truth)
     let predictedUnits = mlData.predicted_units || 0;
 
     console.log(`📊 ML predicted units from Python: ${predictedUnits}`);
 
-    // ✅ Apply household multiplier to units
-    if (utility !== "Internet" && predictedUnits > 0) {
+    // Apply household multiplier to units
+    if (predictedUnits > 0) {
       const multiplier = calculateHouseholdMultiplier(hf, utility);
       const adjusted = Math.round(predictedUnits * multiplier);
       console.log(`🏠 Household multiplier: ×${multiplier} → ${predictedUnits} → ${adjusted} units`);
@@ -187,11 +213,11 @@ export const predictBill = async (
 
     console.log(`📊 Final units for ${utility}: ${predictedUnits}`);
 
-    // ✅ Calculate amount using tariff (ONE place)
+    // Calculate amount using tariff
     let finalAmount = 0;
     let tariffUsed = false;
 
-    if (utility !== "Internet" && predictedUnits > 0) {
+    if (predictedUnits > 0) {
       try {
         const Tariff = (await import("../models/Tariff.js")).default;
         const activeTariff = await Tariff.findOne({
