@@ -65,7 +65,7 @@ function weightedAvg(amounts) {
   if (!amounts.length) return 0;
   if (amounts.length === 1) return amounts[0];
   if (amounts.length === 2) return amounts[0]*0.6 + amounts[1]*0.4;
-  return amounts[0]*0.5 + amounts[1]*0.3 + amounts[2]*0.2;
+  return amounts[0]*0.5 + amounts[1]*0.3 + amounts[2]*0.20;
 }
 
 /** Linear regression prediction (mirrors predict_linear_regression in app.py) */
@@ -181,7 +181,7 @@ const Prediction = () => {
   };
 
   // ── Page-level modal ──
-  const [showBacktester, setShowBacktester] = useState(false); // modal for backtester
+  const [showBacktester, setShowBacktester] = useState(false);
 
   // ── Predictions tab state ──
   const [loading, setLoading] = useState(true);
@@ -209,7 +209,7 @@ const Prediction = () => {
   });
 
   // ── Household data popup ──
-  const [hasHouseholdData, setHasHouseholdData] = useState(null); // null = loading, false = no data, true = has data
+  const [hasHouseholdData, setHasHouseholdData] = useState(null);
 
   // ── Backtester tab state ──
   const [allBills, setAllBills]                   = useState([]);
@@ -217,7 +217,7 @@ const Prediction = () => {
   const [btTargetMonth, setBtTargetMonth]         = useState("");
   const [btResult, setBtResult]                   = useState(null);
   const [btRunning, setBtRunning]                 = useState(false);
-  const [btAllResults, setBtAllResults]           = useState([]); // full history run
+  const [btAllResults, setBtAllResults]           = useState([]);
   const [btLoadingBills, setBtLoadingBills]       = useState(false);
 
   const meta = UTIL_META[selectedUtility];
@@ -249,13 +249,11 @@ const Prediction = () => {
       .filter((v, i, a) => a.indexOf(v) === i)
       .sort();
     
-    // Show months that have at least 3 months of data BEFORE them
-    // This ensures the model has enough data to make a prediction
     return allMonths.filter((month) => {
       const priorBills = allBills.filter(b => 
         b.utilityType === btUtility && b.billingMonth < month
       );
-      return priorBills.length >= 3;  // Need at least 3 months of history
+      return priorBills.length >= 3;
     });
   }, [allBills, btUtility]);
 
@@ -264,10 +262,9 @@ const Prediction = () => {
     if (!btTargetMonth) return;
     setBtRunning(true);
     setBtResult(null);
-    setTimeout(() => { // tiny defer so UI updates
+    setTimeout(() => {
       const sim = simulatePrediction(allBills, btTargetMonth, btUtility);
       if (!sim) { setBtRunning(false); return; }
-      // Find actual bill for that month
       const actual = allBills.find(
         b => b.utilityType === btUtility && b.billingMonth === btTargetMonth
       );
@@ -372,7 +369,7 @@ const Prediction = () => {
       if (response.ok) {
         alert("✅ Household details saved!");
         setShowHouseholdForm(false);
-        setHasHouseholdData(true); // dismiss the popup permanently
+        setHasHouseholdData(true);
         fetchPredictionData();
       } else { alert("❌ Failed to save. Please try again."); }
     } catch (error) { alert("❌ Error saving."); }
@@ -395,13 +392,13 @@ const Prediction = () => {
             });
             setHasHouseholdData(true);
           } else {
-            setHasHouseholdData(false); // trigger the popup
+            setHasHouseholdData(false);
           }
         } else {
-          setHasHouseholdData(false); // trigger the popup
+          setHasHouseholdData(false);
         }
       } catch (error) {
-        setHasHouseholdData(false); // trigger the popup
+        setHasHouseholdData(false);
       }
     };
     loadHouseholdFeatures();
@@ -442,14 +439,12 @@ const Prediction = () => {
 
   const ax = { fill:C.faint, fontSize:11, fontFamily:F };
 
-  // ── Format month key to readable label ─────────────────────────────────────
   const fmtMonthKey = (key) => {
     if (!key) return "";
     const [y, m] = key.split("-");
     return `${MONTH_NAMES[parseInt(m,10)-1]} ${y}`;
   };
 
-  // ── Backtest accuracy summary ────────────────────────────────────────────────
   const btSummary = useMemo(() => {
     if (!btAllResults.length) return null;
     const errors = btAllResults.filter(r=>r.errorPct!==null).map(r=>Math.abs(r.errorPct));
@@ -460,7 +455,7 @@ const Prediction = () => {
   }, [btAllResults]);
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // LOADING / ERROR
+  // LOADING
   // ─────────────────────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -507,8 +502,6 @@ const Prediction = () => {
           </button>
         </div>
       </div>
-
-
 
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {/* BACKTESTER MODAL                                                        */}
@@ -774,11 +767,51 @@ const Prediction = () => {
       <>
         {(error || (!predictionData && !loading)) ? (
           <div style={{ display:"flex", alignItems:"center", justifyContent:"center", minHeight:"40vh", flexDirection:"column", gap:16 }}>
-            <div style={{ textAlign:"center", padding:"60px 40px", background:C.card, borderRadius:18, border:`1px solid ${C.border}`, boxShadow:C.s1 }}>
-              <p style={{ fontSize:"2.5rem", margin:"0 0 12px" }}>📭</p>
-              <h3 style={{ fontSize:"1.2rem", color:C.ink, margin:"0 0 8px", fontWeight:700 }}>No Data Available</h3>
-              <p style={{ color:C.muted, margin:0 }}>{error || `Add some ${selectedUtility.toLowerCase()} bills to generate predictions.`}</p>
-              <button onClick={fetchPredictionData} style={{ marginTop:20, padding:"8px 20px", borderRadius:8, background:C.blue, color:"#fff", border:"none", cursor:"pointer" }}>Retry</button>
+            <div style={{ textAlign:"center", padding:"60px 40px", background:C.card, borderRadius:18, border:`1px solid ${C.border}`, boxShadow:C.s1, maxWidth:500 }}>
+              <div style={{ fontSize:"3.5rem", margin:"0 0 8px" }}>
+                {selectedUtility === "Internet" ? "📡" : "📭"}
+              </div>
+              <h3 style={{ fontSize:"1.2rem", color:C.ink, margin:"0 0 8px", fontWeight:700 }}>
+                {selectedUtility === "Internet" ? "No Internet Bills Yet" : "No Data Available"}
+              </h3>
+              <p style={{ color:C.muted, margin:"0 0 20px", lineHeight:1.6 }}>
+                {selectedUtility === "Internet" 
+                  ? "Add your internet bills to start seeing predictions."
+                  : error || `Add some ${selectedUtility.toLowerCase()} bills to generate predictions.`}
+              </p>
+
+              {/* Utility switcher buttons */}
+              <div style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:10, marginBottom:20, flexWrap:"wrap" }}>
+                <span style={{ fontSize:"0.75rem", color:C.muted }}>Switch to:</span>
+                {Object.entries(UTIL_META).map(([key, m]) => (
+                  key !== selectedUtility && (
+                    <button
+                      key={key}
+                      onClick={() => setSelectedUtility(key)}
+                      style={{
+                        display:"flex", alignItems:"center", gap:6,
+                        padding:"8px 16px", borderRadius:10,
+                        border:`1.5px solid ${m.bdr}`, background:m.bg, color:m.color,
+                        fontFamily:F, fontSize:"0.82rem", fontWeight:600,
+                        cursor:"pointer", transition:"all .15s"
+                      }}
+                    >
+                      {m.icon(14)} {key}
+                    </button>
+                  )
+                ))}
+              </div>
+
+              <button
+                onClick={fetchPredictionData}
+                style={{
+                  padding:"8px 20px", borderRadius:8,
+                  background:C.blue, color:"#fff", border:"none",
+                  cursor:"pointer", fontFamily:F, fontSize:"0.82rem", fontWeight:600
+                }}
+              >
+                Retry
+              </button>
             </div>
           </div>
         ) : (
@@ -868,6 +901,7 @@ const Prediction = () => {
                           {label:"Number of Bathrooms",field:"num_bathrooms",type:"number"},
                           {label:"Number of People",field:"num_people",type:"number"},
                           {label:"Has Water Heater?",field:"has_water_heater",type:"bool"},
+                          {label:"Has Washing Machine?",field:"has_washing_machine",type:"bool"},
                           {label:"Has Garden?",field:"has_garden",type:"bool"},
                           {label:"Has Swimming Pool?",field:"has_pool",type:"bool"},
                         ].map(f=>(
@@ -1082,7 +1116,6 @@ const Prediction = () => {
             </>
           )}
         </>
-     
 
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {/* HOUSEHOLD DATA POPUP MODAL                                          */}
@@ -1109,7 +1142,7 @@ const Prediction = () => {
                 ))}
               </div>
 
-              {/* Form content - same as existing */}
+              {/* Form content */}
               {activeTab==="electricity" && (
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))", gap:14 }}>
                   {[
@@ -1137,6 +1170,7 @@ const Prediction = () => {
                     {label:"Number of Bathrooms",field:"num_bathrooms",type:"number"},
                     {label:"Number of People",field:"num_people",type:"number"},
                     {label:"Has Water Heater?",field:"has_water_heater",type:"bool"},
+                    {label:"Has Washing Machine?",field:"has_washing_machine",type:"bool"},
                     {label:"Has Garden?",field:"has_garden",type:"bool"},
                     {label:"Has Swimming Pool?",field:"has_pool",type:"bool"},
                   ].map(f=>(
